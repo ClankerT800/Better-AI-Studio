@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "AI Studio Settings",
+  "name": "AI Studio Presets",
   "version": "1.0",
-  "description": "Automatically applies your preferred settings to new AI Studio chats.",
+  "description": "Instantly apply your favorite AI studio presets to avoid manual setup for each chat.",
   "permissions": [
     "storage",
     "scripting",
@@ -13,7 +13,9 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_icon": "Logo.jpg"
+    "default_icon": {
+      "128": "Logo.jpg"
+    }
   },
   "icons": {
     "128": "Logo.jpg"
