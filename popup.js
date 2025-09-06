@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.get(['presets'], (result) => {
             const presets = result.presets || [];
             presets.push(preset);
-            chrome.storage.local.set({ presets, activePresetIndex: presets.length -1 }, () => {
+            chrome.storage.local.set({ presets, activePresetIndex: presets.length - 1 }, () => {
                 loadPresets();
                 closeModal();
             });
