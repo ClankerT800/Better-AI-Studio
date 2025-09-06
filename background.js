@@ -1,20 +1,8 @@
-const targetUrl = "https://aistudio.google.com/prompts/new_chat";
-
-function injectScript(tabId) {
-    chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        files: ['content.js']
-    });
-}
-
-chrome.webNavigation.onCompleted.addListener((details) => {
-    if (details.url.startsWith(targetUrl)) {
-        injectScript(details.tabId);
-    }
-});
-
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
-    if (details.url.startsWith(targetUrl)) {
-        injectScript(details.tabId);
+    if (details.url.startsWith('https://aistudio.google.com/prompts/new_chat') && !details.url.includes('model=gemini-1.5-flash-preview')) {
+        chrome.scripting.executeScript({
+            target: { tabId: details.tabId },
+            files: ['content.js']
+        });
     }
 });

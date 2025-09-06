@@ -7,33 +7,62 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #202124; --surface-color: #303134; --primary-accent: #8ab4f8;
-            --text-primary: #e8eaed; --text-secondary: #bdc1c6; --border-color: #5f6368;
-            --slider-track: #5f6368; --danger-color: #f28b82;
+            --bg-color: #202124;
+            --surface-color: #303134;
+            --primary-accent: #8ab4f8;
+            --text-primary: #e8eaed;
+            --text-secondary: #bdc1c6;
+            --border-color: #5f6368;
+            --slider-track: #5f6368;
+            --danger-color: #f28b82;
         }
         body {
-            font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-primary);
-            width: 380px; padding: 24px; margin: 0; user-select: none;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            width: 380px;
+            padding: 24px;
+            margin: 0;
+            user-select: none;
         }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
         h2 {
-            color: var(--primary-accent); font-weight: 500; font-size: 1.4em;
-            margin: 0; text-align: left;
+            color: var(--primary-accent);
+            font-weight: 500;
+            font-size: 1.4em;
+            margin: 0;
         }
         h3 {
-            color: var(--text-secondary); font-weight: 500; font-size: 1em; margin-top: 32px;
-            margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--surface-color);
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 1em;
+            margin-top: 32px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--surface-color);
         }
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-size: 0.9em; color: var(--text-secondary); }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
         .slider-container { display: flex; align-items: center; gap: 12px; }
         input[type="range"] {
-            -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
-            background: var(--slider-track); border-radius: 5px; outline: none; flex-grow: 1;
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 4px; background: var(--slider-track);
+            border-radius: 5px; outline: none; flex-grow: 1;
         }
         input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
-            background: var(--primary-accent); border-radius: 50%; cursor: pointer; transition: background-color 0.2s;
+            -webkit-appearance: none; appearance: none;
+            width: 16px; height: 16px; background: var(--primary-accent);
+            border-radius: 50%; cursor: pointer; transition: background-color 0.2s;
         }
         input[type="range"]::-webkit-slider-thumb:hover { background-color: #a1c6ff; }
         input[type="range"]::-moz-range-thumb {
@@ -47,9 +76,11 @@
         }
         textarea {
             width: calc(100% - 24px); background-color: var(--surface-color);
-            border: 1px solid var(--border-color); border-radius: 4px; padding: 12px;
-            color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 0.95em;
-            transition: border-color 0.2s, box-shadow 0.2s; resize: vertical; min-height: 70px;
+            border: 1px solid var(--border-color); border-radius: 4px;
+            padding: 12px; color: var(--text-primary);
+            font-family: 'Inter', sans-serif; font-size: 0.95em;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            resize: vertical; min-height: 70px;
         }
         textarea:focus {
             outline: none; border-color: var(--primary-accent);
@@ -57,9 +88,9 @@
         }
         .checkbox-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .checkbox-group label {
-            background-color: var(--surface-color); padding: 10px 14px; border-radius: 6px;
-            display: flex; align-items: center; cursor: pointer;
-            font-size: 0.95em; transition: background-color 0.2s;
+            background-color: var(--surface-color); padding: 10px 14px;
+            border-radius: 6px; display: flex; align-items: center;
+            cursor: pointer; font-size: 0.95em; transition: background-color 0.2s;
         }
         .checkbox-group label:hover { background-color: #3c4043; }
         .checkbox-group input[type="checkbox"] {
@@ -67,20 +98,32 @@
             accent-color: var(--primary-accent);
         }
         button {
-            width: 100%; padding: 12px; background-color: var(--primary-accent); color: var(--bg-color);
-            border: none; border-radius: 6px; cursor: pointer; font-size: 1em; font-weight: bold;
+            width: 100%; padding: 12px; background-color: var(--primary-accent);
+            color: var(--bg-color); border: none; border-radius: 6px;
+            cursor: pointer; font-size: 1em; font-weight: bold;
             transition: background-color 0.2s, transform 0.1s;
         }
         button:hover { background-color: #a1c6ff; }
         button:active { transform: scale(0.98); }
-        #presets-list { list-style: none; padding: 0; margin-top: 10px; max-height: 160px; overflow-y: auto; }
-        .preset-item {
-            display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
-            background-color: var(--surface-color); border-radius: 6px; margin-bottom: 8px;
-            cursor: pointer; transition: background-color 0.2s, border-left 0.2s; border-left: 3px solid transparent;
+        #presets-list {
+            list-style: none; padding: 0; margin-top: 10px;
+            max-height: 160px; overflow-y: auto;
         }
-        .preset-item:hover { background-color: #3c4043; border-left-color: #5f6368; }
-        .preset-item.selected { background-color: #313a4c; border-left-color: var(--primary-accent); }
+        .preset-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; background-color: var(--surface-color);
+            border-radius: 6px; margin-bottom: 8px; cursor: pointer;
+            transition: background-color 0.2s, border-left 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .preset-item:hover {
+            background-color: #3c4043;
+            border-left-color: #5f6368;
+        }
+        .preset-item.selected {
+            background-color: #313a4c;
+            border-left-color: var(--primary-accent);
+        }
         .preset-name { flex-grow: 1; }
         .delete-preset {
             background: none; border: none; color: var(--text-secondary); cursor: pointer;
@@ -91,26 +134,25 @@
         .delete-preset:hover { color: var(--danger-color); }
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.7); display: none; align-items: center;
-            justify-content: center; z-index: 1000;
+            background-color: rgba(0, 0, 0, 0.7); display: none;
+            align-items: center; justify-content: center; z-index: 1000;
         }
         .modal-content {
-            background-color: #2d2e31; padding: 25px; border-radius: 8px; width: 320px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center;
+            background-color: #2d2e31; padding: 25px; border-radius: 8px;
+            width: 320px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center;
         }
         .modal-content h4 { margin-top: 0; margin-bottom: 20px; color: #e8eaed; }
         .modal-content input {
-            width: calc(100% - 24px); margin-bottom: 20px; background-color: #3c4043;
-            border: 1px solid #5f6368; border-radius: 4px; padding: 12px;
-            color: #e8eaed; font-size: 1em;
+            width: calc(100% - 24px); margin-bottom: 20px;
+            background-color: #3c4043; border: 1px solid #5f6368;
+            border-radius: 4px; padding: 12px; color: #e8eaed; font-size: 1em;
         }
         .modal-actions { display: flex; gap: 10px; }
         #modal-save, #modal-cancel { width: 50%; }
         #modal-cancel { background-color: #5f6368; color: #e8eaed; }
         #modal-cancel:hover { background-color: #70757a; }
-        .divider { border: 0; height: 1px; background-color: var(--surface-color); margin-top: 32px; }
         .donation-link a { text-decoration: none; }
-        .donation-link img { height: 30px; width: auto; }
+        .donation-link img { height: 36px; width: auto; }
         #no-presets-message {
             text-align: center; color: var(--text-secondary);
             font-style: italic; display: none; padding: 20px 0;
@@ -118,14 +160,14 @@
     </style>
 </head>
 <body>
-    <header>
+    <div class="header">
         <h2>AI Studio Presets</h2>
         <div class="donation-link">
             <a href="https://buymeacoffee.com/clankert800" target="_blank">
                 <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee">
             </a>
         </div>
-    </header>
+    </div>
     <div class="form-group">
         <label for="temperature">Temperature</label>
         <div class="slider-container">

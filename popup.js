@@ -84,13 +84,13 @@ document.addEventListener('DOMContentLoaded', () => {
             temperature: parseFloat(ui.tempSlider.value),
             topP: parseFloat(ui.topPSlider.value),
             tools: { codeExecution: ui.codeExecutionToggle.checked, search: ui.searchToggle.checked },
-            systemInstructions: ui.instructionsInput.value,
+            systemInstructions: ui.instructionsInput.value
         };
 
         chrome.storage.local.get(['presets'], (result) => {
             const presets = result.presets || [];
             presets.push(preset);
-            chrome.storage.local.set({ presets }, () => {
+            chrome.storage.local.set({ presets, activePresetIndex: presets.length -1 }, () => {
                 loadPresets();
                 closeModal();
             });

@@ -1,11 +1,10 @@
 (() => {
-    if (window.aiStudioSettingsApplied) return;
-    window.aiStudioSettingsApplied = true;
-
     const styleId = 'ai-studio-settings-hider';
+    if (document.getElementById(styleId)) return;
+
     const style = document.createElement('style');
     style.id = styleId;
-    style.textContent = 'body > app-root { visibility: hidden !important; }';
+    style.textContent = 'body { visibility: hidden !important; }';
     document.documentElement.appendChild(style);
 
     const removeHidingStyle = () => {
@@ -13,102 +12,85 @@
         if (styleElement) styleElement.remove();
     };
 
-    const runPresetLogic = (rootNode) => {
-        chrome.storage.local.get(['presets', 'activePresetIndex'], (result) => {
-            const currentModel = new URLSearchParams(window.location.search).get('model');
-            const { presets, activePresetIndex } = result;
-            
-            if (!presets || presets.length === 0 || activePresetIndex === undefined || activePresetIndex < 0 || !currentModel || currentModel === 'gemini-2.5-flash-image-preview') {
-                removeHidingStyle();
-                return;
+    chrome.storage.local.get(['presets', 'activePresetIndex'], (result) => {
+        const { presets, activePresetIndex } = result;
+        if (!presets || presets.length === 0 || activePresetIndex === undefined || activePresetIndex < 0) {
+            removeHidingStyle();
+            return;
+        }
+
+        const preset = presets[activePresetIndex];
+        if (!preset) {
+            removeHidingStyle();
+            return;
+        }
+
+        const selectors = {
+            tempSlider: 'div[data-test-id="temperatureSliderContainer"] mat-slider input[type="range"]',
+            topPSlider: 'ms-slider[title*="Top P"] input[type="range"]',
+            codeExecutionToggle: 'mat-slide-toggle.code-execution-toggle button',
+            searchToggle: 'mat-slide-toggle.search-as-a-tool-toggle button',
+            systemInstructionsButton: 'button[data-test-id="system-instructions-button"]',
+            systemInstructionsTextarea: 'textarea[aria-label="System instructions"]'
+        };
+
+        const applySettings = () => {
+            const tempSlider = document.querySelector(selectors.tempSlider);
+            if (tempSlider) {
+                tempSlider.value = preset.temperature;
+                tempSlider.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            const preset = presets[activePresetIndex];
-            if (!preset) {
-                removeHidingStyle();
-                return;
+
+            const topPSlider = document.querySelector(selectors.topPSlider);
+            if (topPSlider) {
+                topPSlider.value = preset.topP;
+                topPSlider.dispatchEvent(new Event('input', { bubbles: true }));
             }
 
-            const selectors = {
-                tempSlider: 'div[data-test-id="temperatureSliderContainer"] mat-slider input[type="range"]',
-                tempNumberInput: 'div[data-test-id="temperatureSliderContainer"] input[type="number"]',
-                topPSlider: 'ms-slider[title*="Top P"] input[type="range"]',
-                topPNumberInput: 'ms-slider[title*="Top P"] input[type="number"]',
-                codeExecutionToggle: 'mat-slide-toggle.code-execution-toggle button',
-                searchToggle: 'mat-slide-toggle.search-as-a-tool-toggle button',
-                systemInstructionsButton: 'button[data-test-si]',
-                systemInstructionsTextarea: 'textarea[aria-label="System instructions"]'
-            };
-            const applied = new Set();
-            const allTasks = new Set(Object.keys(selectors));
+            const codeToggle = document.querySelector(selectors.codeExecutionToggle);
+            if (codeToggle && codeToggle.getAttribute('aria-checked') !== String(preset.tools.codeExecution)) {
+                codeToggle.click();
+            }
 
-            const setSliderValue = (el, value) => {
-                if (el && el.value !== String(value)) {
-                    el.value = value;
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            };
-            const setInputValue = (el, value) => {
-                if (el && el.value !== String(value)) {
-                    el.value = value;
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            };
-            const setToggleValue = (el, shouldBeChecked) => {
-                if (el.getAttribute('aria-checked') !== String(shouldBeChecked)) {
-                    el.click();
-                }
-            };
+            const searchToggle = document.querySelector(selectors.searchToggle);
+            if (searchToggle && searchToggle.getAttribute('aria-checked') !== String(preset.tools.search)) {
+                searchToggle.click();
+            }
 
-            const observer = new MutationObserver(() => {
-                if (applied.size === allTasks.size) {
-                    observer.disconnect();
-                    removeHidingStyle();
-                    return;
-                }
-                for (const task of allTasks) {
-                    if (applied.has(task)) continue;
-                    const el = document.querySelector(selectors[task]);
-                    if (el) {
-                        switch (task) {
-                            case 'tempSlider': setSliderValue(el, preset.temperature); break;
-                            case 'tempNumberInput': setInputValue(el, preset.temperature); break;
-                            case 'topPSlider': setSliderValue(el, preset.topP); break;
-                            case 'topPNumberInput': setInputValue(el, preset.topP); break;
-                            case 'codeExecutionToggle': setToggleValue(el, preset.tools.codeExecution); break;
-                            case 'searchToggle': setToggleValue(el, preset.tools.search); break;
-                            case 'systemInstructionsButton': 
-                                if (preset.systemInstructions) el.click();
-                                else applied.add('systemInstructionsTextarea');
-                                break;
-                            case 'systemInstructionsTextarea':
-                                setInputValue(el, preset.systemInstructions);
-                                document.querySelector(selectors.systemInstructionsButton)?.click();
-                                break;
+            if (preset.systemInstructions) {
+                const siButton = document.querySelector(selectors.systemInstructionsButton);
+                if (siButton) {
+                    siButton.click();
+                    // Use a short delay to allow the textarea to become visible
+                    setTimeout(() => {
+                        const siTextarea = document.querySelector(selectors.systemInstructionsTextarea);
+                        if (siTextarea) {
+                            siTextarea.value = preset.systemInstructions;
+                            siTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                            siButton.click(); // Close the dialog
                         }
-                        applied.add(task);
-                    } else if (task === 'systemInstructionsTextarea' && !preset.systemInstructions) {
-                        applied.add(task);
-                    }
+                    }, 100);
                 }
-            });
-
-            observer.observe(rootNode, { childList: true, subtree: true });
-            setTimeout(() => {
-                observer.disconnect();
-                removeHidingStyle();
-            }, 3000);
-        });
-    };
-    
-    if (document.body) {
-        runPresetLogic(document.body);
-    } else {
-        new MutationObserver((_, obs) => {
-            if (document.body) {
-                obs.disconnect();
-                runPresetLogic(document.body);
             }
-        }).observe(document.documentElement, { childList: true });
-    }
+        };
+
+        const observer = new MutationObserver((mutations, obs) => {
+            const settingsContainer = document.querySelector('div[data-test-id="temperatureSliderContainer"]');
+            if (settingsContainer) {
+                applySettings();
+                removeHidingStyle();
+                obs.disconnect();
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        setTimeout(() => {
+            removeHidingStyle();
+            observer.disconnect();
+        }, 3000);
+    });
 })();
