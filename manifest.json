@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "AI Studio Settings",
+  "version": "1.0",
+  "description": "Automatically applies your preferred settings to new AI Studio chats.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://aistudio.google.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "Logo.jpg"
+  },
+  "icons": {
+    "128": "Logo.jpg"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
