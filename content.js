@@ -1,4 +1,8 @@
 (() => {
+    if (!window.location.href.includes('/prompts/')) {
+        return;
+    }
+
     const styleId = 'ai-studio-settings-hider';
     if (document.getElementById(styleId)) return;
 
