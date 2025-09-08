@@ -8,7 +8,15 @@
 
     const style = document.createElement('style');
     style.id = styleId;
-    style.textContent = 'body { visibility: hidden !important; }';
+    const selectorsToHide = [
+        'div[data-test-id="temperatureSliderContainer"]',
+        'ms-slider[title*="Top P"]',
+        'mat-slide-toggle.code-execution-toggle',
+        'mat-slide-toggle.search-as-a-tool-toggle',
+        'div[data-test-id="browseAsAToolTooltip"]',
+        'button[data-test-si]'
+    ];
+    style.textContent = `${selectorsToHide.join(', ')} { visibility: hidden !important; }`;
     document.documentElement.appendChild(style);
 
     const removeHidingStyle = () => {
