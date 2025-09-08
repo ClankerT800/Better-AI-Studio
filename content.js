@@ -3,11 +3,11 @@
         return;
     }
 
-    const styleId = 'ai-studio-settings-hider';
-    if (document.getElementById(styleId)) return;
+    const hideStyleId = 'ai-studio-settings-hider';
+    if (document.getElementById(hideStyleId)) return;
 
     const style = document.createElement('style');
-    style.id = styleId;
+    style.id = hideStyleId;
     const selectorsToHide = [
         'div[data-test-id="temperatureSliderContainer"]',
         'ms-slider[title*="Top P"]',
@@ -19,21 +19,21 @@
     style.textContent = `${selectorsToHide.join(', ')} { visibility: hidden !important; }`;
     document.documentElement.appendChild(style);
 
-    const removeHidingStyle = () => {
-        const styleElement = document.getElementById(styleId);
+    const removeHideStyle = () => {
+        const styleElement = document.getElementById(hideStyleId);
         if (styleElement) styleElement.remove();
     };
 
     chrome.storage.local.get(['presets', 'activePresetIndex'], (result) => {
         const { presets, activePresetIndex } = result;
         if (!presets || presets.length === 0 || activePresetIndex === undefined || activePresetIndex < 0) {
-            removeHidingStyle();
+            removeHideStyle();
             return;
         }
 
         const preset = presets[activePresetIndex];
         if (!preset) {
-            removeHidingStyle();
+            removeHideStyle();
             return;
         }
 
@@ -105,7 +105,7 @@
             setSystemInstructions('');
         };
 
-        const mainObserver = new MutationObserver((mutations, obs) => {
+        const settingsObserver = new MutationObserver((mutations, obs) => {
             const tempSlider = document.querySelector(selectors.tempSlider);
             const modelTitleElement = document.querySelector(selectors.modelTitle);
 
@@ -115,16 +115,16 @@
                 } else {
                     applyPresetSettings();
                 }
-                removeHidingStyle();
+                removeHideStyle();
                 obs.disconnect();
             }
         });
 
-        mainObserver.observe(document.body, { childList: true, subtree: true });
+        settingsObserver.observe(document.body, { childList: true, subtree: true });
         
         setTimeout(() => {
-            removeHidingStyle();
-            mainObserver.disconnect();
+            removeHideStyle();
+            settingsObserver.disconnect();
         }, 5000);
     });
 })();
