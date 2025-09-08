@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (value > max) value = max;
         slider.value = value;
         textInput.value = value.toFixed(2);
+        updateSliderTrack(slider);
     };
 
     ui.temperatureValueInput.addEventListener('change', () => updateSliderFromText(ui.temperatureValueInput, ui.temperatureSlider));
@@ -97,8 +98,19 @@ document.addEventListener('DOMContentLoaded', () => {
         textInput.value = parseFloat(slider.value).toFixed(2);
     };
 
-    ui.temperatureSlider.addEventListener('input', () => updateTextFromSlider(ui.temperatureSlider, ui.temperatureValueInput));
-    ui.topPSlider.addEventListener('input', () => updateTextFromSlider(ui.topPSlider, ui.topPValueInput));
+    const updateSliderTrack = (slider) => {
+        const progress = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
+        slider.style.setProperty('--slider-progress', `${progress}%`);
+    };
+
+    ui.temperatureSlider.addEventListener('input', () => {
+        updateTextFromSlider(ui.temperatureSlider, ui.temperatureValueInput)
+        updateSliderTrack(ui.temperatureSlider);
+    });
+    ui.topPSlider.addEventListener('input', () => {
+        updateTextFromSlider(ui.topPSlider, ui.topPValueInput)
+        updateSliderTrack(ui.topPSlider);
+    });
 
     ui.toolCards.forEach(card => {
         const checkbox = document.getElementById(card.dataset.tool);
@@ -255,6 +267,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.topPSlider.value = state.topP;
         updateTextFromSlider(ui.temperatureSlider, ui.temperatureValueInput);
         updateTextFromSlider(ui.topPSlider, ui.topPValueInput);
+        updateSliderTrack(ui.temperatureSlider);
+        updateSliderTrack(ui.topPSlider);
         
         ui.codeExecutionToggle.checked = state.tools?.codeExecution ?? false;
         ui.searchToggle.checked = state.tools?.search ?? true;
@@ -349,7 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const activeIndex = result.activePresetIndex;
             if (presets.length > 0 && activeIndex >= 0 && activeIndex < presets.length) {
                 applyPresetToPopup(presets[activeIndex]);
-            } else {
+            }
+            else {
                 resetToDefaults();
             }
             loadPresets();
