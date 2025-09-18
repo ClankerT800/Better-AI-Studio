@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Instant AI Studio Settings",
-  "version": "1.1",
-  "description": "Instantly apply your favorite AI studio settings to avoid manual setup for each chat. It's open source, no login, and completely free!",
+  "name": "Better AIstudio",
+  "version": "1.1.1",
+  "description": "Instantly apply your favorite AIstudio settings to avoid manual setup for each chat. It's open source, no login, and completely free!",
   "permissions": [
     "storage",
     "scripting",

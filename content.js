@@ -1,130 +1,138 @@
 (() => {
-    if (!window.location.href.includes('/prompts/')) {
-        return;
-    }
+    if (window.geminiWorkerRunning) return;
+    window.geminiWorkerRunning = true;
 
-    const hideStyleId = 'ai-studio-settings-hider';
-    if (document.getElementById(hideStyleId)) return;
-
-    const style = document.createElement('style');
-    style.id = hideStyleId;
-    const selectorsToHide = [
-        'div[data-test-id="temperatureSliderContainer"]',
-        'ms-slider[title*="Top P"]',
-        'mat-slide-toggle.code-execution-toggle',
-        'mat-slide-toggle.search-as-a-tool-toggle',
-        'div[data-test-id="browseAsAToolTooltip"]',
-        'button[data-test-si]'
-    ];
-    style.textContent = `${selectorsToHide.join(', ')} { visibility: hidden !important; }`;
-    document.documentElement.appendChild(style);
-
-    const removeHideStyle = () => {
-        const styleElement = document.getElementById(hideStyleId);
-        if (styleElement) styleElement.remove();
+    const selectors = {
+        modelTitle: 'ms-model-selector-v3 .title',
+        tempSlider: 'div[data-test-id="temperatureSliderContainer"] mat-slider input[type="range"]',
+        topPSlider: 'ms-slider[title*="Top P"] input[type="range"]',
+        codeExecutionToggle: 'mat-slide-toggle.code-execution-toggle button',
+        searchToggle: 'mat-slide-toggle.search-as-a-tool-toggle button',
+        urlContextToggle: 'div[data-test-id="browseAsAToolTooltip"] button[role="switch"]',
+        systemInstructionsOpenButton: 'button[data-test-system-instructions-card]',
+        systemInstructionsCloseButton: 'button[aria-label="Close panel"]',
+        systemInstructionsTextarea: 'textarea[aria-label="System instructions"]',
+        promptInput: 'textarea[aria-label*="Type something"]',
     };
 
-    chrome.storage.local.get(['presets', 'activePresetIndex'], (result) => {
-        const { presets, activePresetIndex } = result;
-        if (!presets || presets.length === 0 || activePresetIndex === undefined || activePresetIndex < 0) {
-            removeHideStyle();
+    const waitForElement = (selector, callback, timeout = 3000) => {
+        const interval = setInterval(() => {
+            const element = document.querySelector(selector);
+            if (element) {
+                clearInterval(interval);
+                callback(element);
+            }
+        }, 100);
+        setTimeout(() => clearInterval(interval), timeout);
+    };
+
+    const setSlider = (selector, value) => {
+        const el = document.querySelector(selector);
+        if (el) {
+            el.value = value;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    };
+
+    const setToggle = (selector, shouldBeChecked) => {
+        const el = document.querySelector(selector);
+        if (el && (el.getAttribute('aria-checked') === 'true') !== shouldBeChecked) {
+            el.click();
+        }
+    };
+
+    const setSystemInstructions = (instructions, callback) => {
+        const style = document.createElement('style');
+        style.id = 'gemini-worker-style';
+        style.textContent = `body > .cdk-overlay-container { display: none !important; }`;
+        document.head.appendChild(style);
+
+        const openButton = document.querySelector(selectors.systemInstructionsOpenButton);
+        if (!openButton) {
+            style.remove();
+            if (callback) callback();
             return;
         }
+        openButton.click();
 
-        const preset = presets[activePresetIndex];
-        if (!preset) {
-            removeHideStyle();
-            return;
-        }
-
-        const selectors = {
-            modelTitle: 'ms-model-selector-v3 .title',
-            tempSlider: 'div[data-test-id="temperatureSliderContainer"] mat-slider input[type="range"]',
-            topPSlider: 'ms-slider[title*="Top P"] input[type="range"]',
-            codeExecutionToggle: 'mat-slide-toggle.code-execution-toggle button',
-            searchToggle: 'mat-slide-toggle.search-as-a-tool-toggle button',
-            urlContextToggle: 'div[data-test-id="browseAsAToolTooltip"] button[role="switch"]',
-            systemInstructionsOpenButton: 'button[data-test-si]',
-            systemInstructionsCloseButton: 'button[aria-label="Close system instructions"]',
-            systemInstructionsTextarea: 'textarea[aria-label="System instructions"]'
-        };
-
-        const setSliderValue = (selector, value) => {
-            const el = document.querySelector(selector);
-            if (el && el.value !== String(value)) {
-                el.value = value;
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-        };
-
-        const setToggleValue = (selector, shouldBeChecked) => {
-            const el = document.querySelector(selector);
-            if (!el) return;
-            const isChecked = el.getAttribute('aria-checked') === 'true';
-            if (isChecked !== shouldBeChecked) {
-                el.click();
-            }
-        };
-
-        const setSystemInstructions = (instructions) => {
-            const openButton = document.querySelector(selectors.systemInstructionsOpenButton);
-            if (!openButton) return;
-
-            openButton.click();
-            const observer = new MutationObserver((_, obs) => {
-                const textarea = document.querySelector(selectors.systemInstructionsTextarea);
-                const closeButton = document.querySelector(selectors.systemInstructionsCloseButton);
-                if (textarea && closeButton) {
+        setTimeout(() => {
+            const panel = document.querySelector('.ms-sliding-right-panel-dialog');
+            if (panel) {
+                const textarea = panel.querySelector(selectors.systemInstructionsTextarea);
+                if (textarea) {
                     textarea.value = instructions;
                     textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                    closeButton.click();
-                    obs.disconnect();
                 }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-            setTimeout(() => observer.disconnect(), 2000);
-        };
-
-        const applyPresetSettings = () => {
-            setSliderValue(selectors.tempSlider, preset.temperature);
-            setSliderValue(selectors.topPSlider, preset.topP);
-            setToggleValue(selectors.codeExecutionToggle, preset.tools.codeExecution);
-            setToggleValue(selectors.searchToggle, preset.tools.search);
-            setToggleValue(selectors.urlContextToggle, preset.tools.urlContext || false);
-            if (preset.systemInstructions !== undefined) {
-                setSystemInstructions(preset.systemInstructions);
+                const closeButton = panel.querySelector(selectors.systemInstructionsCloseButton);
+                if (closeButton) {
+                    closeButton.click();
+                }
             }
-        };
+            setTimeout(() => {
+                style.remove();
+                if (callback) callback();
+            }, 150);
+        }, 200);
+    };
 
-        const resetToDefaults = () => {
-            setSliderValue(selectors.tempSlider, 1.0);
-            setSliderValue(selectors.topPSlider, 0.95);
-            setToggleValue(selectors.codeExecutionToggle, false);
-            setToggleValue(selectors.searchToggle, true);
-            setToggleValue(selectors.urlContextToggle, false);
-            setSystemInstructions('');
-        };
+    const applyPreset = (preset) => {
+        setSlider(selectors.tempSlider, preset.temperature);
+        setSlider(selectors.topPSlider, preset.topP);
+        setToggle(selectors.codeExecutionToggle, preset.tools.codeExecution);
+        setToggle(selectors.searchToggle, preset.tools.search);
+        setToggle(selectors.urlContextToggle, preset.tools.urlContext || false);
+        setSystemInstructions(preset.systemInstructions, () => {
+            const promptInput = document.querySelector(selectors.promptInput);
+            if (promptInput) promptInput.focus();
+            window.geminiWorkerRunning = false;
+        });
+    };
 
-        const settingsObserver = new MutationObserver((mutations, obs) => {
-            const tempSlider = document.querySelector(selectors.tempSlider);
-            const modelTitleElement = document.querySelector(selectors.modelTitle);
+    const resetToDefaults = () => {
+        setSlider(selectors.tempSlider, 1.0);
+        setSlider(selectors.topPSlider, 0.95);
+        setToggle(selectors.codeExecutionToggle, false);
+        setToggle(selectors.searchToggle, true);
+        setToggle(selectors.urlContextToggle, false);
+        setSystemInstructions('', () => {
+            const promptInput = document.querySelector(selectors.promptInput);
+            if (promptInput) promptInput.focus();
+            window.geminiWorkerRunning = false;
+        });
+    };
 
-            if (tempSlider && modelTitleElement && modelTitleElement.textContent.trim() !== '') {
-                if (modelTitleElement.textContent.trim().toLowerCase().includes('nano banana')) {
+    const init = () => {
+        if (!window.location.href.includes('/prompts/')) {
+            window.geminiWorkerRunning = false;
+            return;
+        }
+
+        waitForElement(selectors.modelTitle, () => {
+            chrome.storage.local.get(['presets', 'activePresetIndex'], (result) => {
+                const modelTitleEl = document.querySelector(selectors.modelTitle);
+                if (!modelTitleEl) {
+                    window.geminiWorkerRunning = false;
+                    return;
+                }
+
+                const modelName = modelTitleEl.textContent.trim().toLowerCase();
+
+                if (modelName.includes('nano banana')) {
                     resetToDefaults();
                 } else {
-                    applyPresetSettings();
+                    if (result.presets && result.activePresetIndex !== undefined && result.activePresetIndex >= 0) {
+                        const preset = result.presets[result.activePresetIndex];
+                        if (preset) {
+                            applyPreset(preset);
+                        }
+                    } else {
+                         window.geminiWorkerRunning = false;
+                    }
                 }
-                removeHideStyle();
-                obs.disconnect();
-            }
+            });
         });
+    };
 
-        settingsObserver.observe(document.body, { childList: true, subtree: true });
-        
-        setTimeout(() => {
-            removeHideStyle();
-            settingsObserver.disconnect();
-        }, 5000);
-    });
+    init();
+
 })();
