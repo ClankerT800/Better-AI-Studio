@@ -1,4 +1,4 @@
-# Better AIstudio Settings
+# Better AIstudio
 
 Instantly apply your favorite AIstudio settings to avoid manual setup for each chat. It's open source, no login, and completely free!
 
@@ -31,4 +31,4 @@ If you want to make changes, add more settings or change UI to your liking for e
 
 If you find this extension useful, a donation will help me a lot!
 
-<a href="https://buymeacoffee.com/clankert800" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40"></a>Buy Me A Coffee" height="40"></a>
+<a href="https://buymeacoffee.com/clankert800" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40"></a>

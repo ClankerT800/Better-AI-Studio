@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let activePresetState = null;
+    let deleteIndex = -1;
 
     const deepEqual = (obj1, obj2) => {
         if (obj1 === obj2) return true;
@@ -53,11 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const updateSaveButtonState = () => {
         chrome.storage.local.get('presets', ({ presets }) => {
-            if (!presets || presets.length === 0) {
-                UI.savePresetBtn.disabled = false;
-                return;
-            }
-            if (!activePresetState) {
+            if (!presets || presets.length === 0 || !activePresetState) {
                 UI.savePresetBtn.disabled = true;
                 return;
             }
@@ -67,7 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const setupChangeListeners = () => {
-        const inputs = [UI.temperatureSlider, UI.topPSlider, UI.systemInstructionsTextarea, UI.temperatureValueInput, UI.topPValueInput, UI.codeExecutionToggle, UI.searchToggle, UI.urlContextToggle];
+        const inputs = [
+            UI.temperatureSlider, UI.topPSlider, UI.systemInstructionsTextarea,
+            UI.temperatureValueInput, UI.topPValueInput, UI.codeExecutionToggle,
+            UI.searchToggle, UI.urlContextToggle
+        ];
         inputs.forEach(el => {
             el.addEventListener('input', updateSaveButtonState);
             el.addEventListener('change', updateSaveButtonState);
@@ -85,9 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSliderTrack(slider);
     };
 
-    UI.temperatureValueInput.addEventListener('change', () => updateSliderFromText(UI.temperatureValueInput, UI.temperatureSlider));
-    UI.topPValueInput.addEventListener('change', () => updateSliderFromText(UI.topPValueInput, UI.topPSlider));
-
     const updateTextFromSlider = (slider, textInput) => {
         textInput.value = parseFloat(slider.value).toFixed(2);
     };
@@ -96,31 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const progress = ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
         slider.style.setProperty('--slider-progress', `${progress}%`);
     };
-
-    UI.temperatureSlider.addEventListener('input', () => {
-        updateTextFromSlider(UI.temperatureSlider, UI.temperatureValueInput);
-        updateSliderTrack(UI.temperatureSlider);
-    });
-
-    UI.topPSlider.addEventListener('input', () => {
-        updateTextFromSlider(UI.topPSlider, UI.topPValueInput);
-        updateSliderTrack(UI.topPSlider);
-    });
-
-    UI.toolCards.forEach(card => {
-        const checkbox = document.getElementById(card.dataset.tool);
-        if (!checkbox) return;
-
-        const syncCardClass = () => card.classList.toggle('active', checkbox.checked);
-        checkbox.addEventListener('change', syncCardClass);
-
-        card.addEventListener('click', (e) => {
-            if (e.target.tagName !== 'INPUT') {
-                checkbox.checked = !checkbox.checked;
-                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        });
-    });
 
     const makePresetNameEditable = (span, index) => {
         const originalName = span.textContent;
@@ -131,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.assign(input.style, {
             width: '100%', padding: '0', margin: '0', border: '1px solid var(--primary-accent)',
             borderRadius: '4px', background: 'var(--surface-elevated)', color: 'var(--text-primary)',
-            fontFamily: 'inherit', fontSize: '14px', fontWeight: '500', outline: 'none', textAlign: 'left'
+            fontFamily: 'inherit', fontSize: '13px', fontWeight: '500', outline: 'none', textAlign: 'left'
         });
         span.replaceWith(input);
         input.focus();
@@ -158,16 +131,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    UI.presetsListContainer.addEventListener('dblclick', (e) => {
-        const span = e.target.closest('.preset__name');
-        if (span) {
-            const li = e.target.closest('.preset');
-            if (li?.dataset.index) {
-                makePresetNameEditable(span, parseInt(li.dataset.index, 10));
-            }
-        }
-    });
-
     const handlePresetSelect = (index) => {
         chrome.storage.local.get('presets', ({ presets }) => {
             if (!presets?.[index]) return;
@@ -180,11 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loadPresets = () => {
         chrome.storage.local.get(['presets', 'activePresetIndex'], ({ presets = [], activePresetIndex }) => {
-            UI.savePresetBtn.textContent = presets.length === 0 ? 'Save as Preset' : 'Save';
-            UI.addNewPresetBtn.style.display = presets.length === 0 ? 'none' : 'block';
-            UI.presetsListContainer.innerHTML = '';
+            UI.savePresetBtn.textContent = 'Save';
+            UI.addNewPresetBtn.style.display = 'block';
             UI.noPresetsMsg.style.display = presets.length === 0 ? 'block' : 'none';
 
+            const fragment = document.createDocumentFragment();
             presets.forEach((preset, index) => {
                 if (!preset?.name) return;
                 const li = document.createElement('li');
@@ -197,26 +160,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                         </button>
                     </div>`;
-                li.addEventListener('click', () => !li.querySelector('input.preset__name-input') && handlePresetSelect(index));
-                li.querySelector('.preset__action-button--delete').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    UI.deleteConfirmModal.style.display = 'flex';
-                    const confirmHandler = () => {
-                        presets.splice(index, 1);
-                        const newActiveIndex = (activePresetIndex === index) ? -1 : (activePresetIndex > index ? activePresetIndex - 1 : activePresetIndex);
-                        chrome.storage.local.set({ presets, activePresetIndex: newActiveIndex }, () => {
-                            if (newActiveIndex === -1) {
-                                activePresetState = null;
-                                resetToDefaults();
-                            }
-                            loadPresets();
-                            closeConfirmModal();
-                        });
-                    };
-                    UI.deleteConfirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
-                });
-                UI.presetsListContainer.appendChild(li);
+                fragment.appendChild(li);
             });
+            UI.presetsListContainer.innerHTML = '';
+            UI.presetsListContainer.appendChild(fragment);
             updateSaveButtonState();
         });
     };
@@ -259,6 +206,70 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeSaveModal = closeModal(UI.savePresetModal);
     const closeConfirmModal = closeModal(UI.deleteConfirmModal);
 
+    UI.temperatureValueInput.addEventListener('change', () => updateSliderFromText(UI.temperatureValueInput, UI.temperatureSlider));
+    UI.topPValueInput.addEventListener('change', () => updateSliderFromText(UI.topPValueInput, UI.topPSlider));
+    UI.temperatureSlider.addEventListener('input', () => {
+        updateTextFromSlider(UI.temperatureSlider, UI.temperatureValueInput);
+        updateSliderTrack(UI.temperatureSlider);
+    });
+    UI.topPSlider.addEventListener('input', () => {
+        updateTextFromSlider(UI.topPSlider, UI.topPValueInput);
+        updateSliderTrack(UI.topPSlider);
+    });
+
+    UI.toolCards.forEach(card => {
+        const checkbox = document.getElementById(card.dataset.tool);
+        if (!checkbox) return;
+        const syncCardClass = () => card.classList.toggle('active', checkbox.checked);
+        checkbox.addEventListener('change', syncCardClass);
+        card.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    });
+
+    UI.presetsListContainer.addEventListener('click', (e) => {
+        const presetLi = e.target.closest('.preset');
+        if (!presetLi || presetLi.querySelector('.preset__name-input')) return;
+
+        const index = parseInt(presetLi.dataset.index, 10);
+        if (isNaN(index)) return;
+
+        if (e.target.closest('.preset__action-button--delete')) {
+            e.stopPropagation();
+            deleteIndex = index;
+            UI.deleteConfirmModal.style.display = 'flex';
+        } else {
+            handlePresetSelect(index);
+        }
+    });
+
+    UI.presetsListContainer.addEventListener('dblclick', (e) => {
+        const nameSpan = e.target.closest('.preset__name');
+        const presetLi = e.target.closest('.preset');
+        if (nameSpan && presetLi?.dataset.index) {
+            makePresetNameEditable(nameSpan, parseInt(presetLi.dataset.index, 10));
+        }
+    });
+
+    UI.deleteConfirmModalConfirmBtn.addEventListener('click', () => {
+        if (deleteIndex === -1) return;
+        chrome.storage.local.get(['presets', 'activePresetIndex'], ({ presets, activePresetIndex }) => {
+            presets.splice(deleteIndex, 1);
+            const newActiveIndex = (activePresetIndex === deleteIndex) ? -1 : (activePresetIndex > deleteIndex ? activePresetIndex - 1 : activePresetIndex);
+            chrome.storage.local.set({ presets, activePresetIndex: newActiveIndex }, () => {
+                if (newActiveIndex === -1) {
+                    resetToDefaults();
+                }
+                loadPresets();
+                closeConfirmModal();
+                deleteIndex = -1;
+            });
+        });
+    });
+
     UI.savePresetModalCancelBtn.addEventListener('click', closeSaveModal);
     UI.savePresetModal.addEventListener('click', (e) => e.target === UI.savePresetModal && closeSaveModal());
     UI.deleteConfirmModalCancelBtn.addEventListener('click', closeConfirmModal);
@@ -273,10 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     UI.savePresetBtn.addEventListener('click', () => {
         chrome.storage.local.get(['presets', 'activePresetIndex'], ({ presets = [], activePresetIndex }) => {
-            if (presets.length === 0) {
-                UI.savePresetModal.style.display = 'flex';
-                UI.presetNameModalInput.focus();
-            } else if (activePresetIndex !== undefined && activePresetIndex >= 0) {
+            if (activePresetIndex !== undefined && activePresetIndex >= 0) {
                 const currentState = getCurrentUiState();
                 presets[activePresetIndex] = { ...currentState, name: presets[activePresetIndex].name };
                 chrome.storage.local.set({ presets }, () => {
@@ -284,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const originalText = UI.savePresetBtn.textContent;
                     UI.savePresetBtn.textContent = 'Saved!';
                     updateSaveButtonState();
-                    setTimeout(() => UI.savePresetBtn.textContent = originalText, 1500);
+                    setTimeout(() => { UI.savePresetBtn.textContent = originalText; }, 1500);
                 });
             }
         });
