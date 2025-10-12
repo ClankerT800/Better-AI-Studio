@@ -10,6 +10,9 @@
 </head>
 <body>
     <header class="popup-header">
+        <div id="settings-btn" title="Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </div>
         <h2 class="popup-header__title">Better AIstudio</h2>
         <div class="popup-header__actions">
             <a href="https://x.com/ClankerT800" target="_blank" title="Follow on X">
@@ -52,10 +55,12 @@
             <label for="system-instructions-textarea">System Instructions</label>
             <textarea id="system-instructions-textarea" rows="4"></textarea>
         </section>
-        <button id="save-preset-btn">Save</button>
-        <h3>Your Presets</h3>
-        <ul id="presets-list-container"></ul>
-        <button id="add-new-preset-btn">Add New Preset</button>
+        <button id="save-preset-btn">Save Preset</button>
+        <div class="presets-section">
+            <h3>Your Presets</h3>
+            <ul id="presets-list-container"></ul>
+            <button id="add-new-preset-btn">Add New Preset</button>
+        </div>
         <p id="no-presets-msg">You don't have any presets yet.</p>
     </main>
     <div id="save-preset-modal" class="modal">

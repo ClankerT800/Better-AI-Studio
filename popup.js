@@ -20,23 +20,21 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteConfirmModalConfirmBtn: document.getElementById('delete-confirm-modal-confirm-btn'),
         deleteConfirmModalCancelBtn: document.getElementById('delete-confirm-modal-cancel-btn'),
         noPresetsMsg: document.getElementById('no-presets-msg'),
+        presetsSection: document.querySelector('.presets-section'),
     };
 
     let activePresetState = null;
     let deleteIndex = -1;
+    let isProgrammaticUpdate = false;
 
     const deepEqual = (obj1, obj2) => {
         if (obj1 === obj2) return true;
-        if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) {
-            return false;
-        }
+        if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) return false;
         const keys1 = Object.keys(obj1);
         const keys2 = Object.keys(obj2);
         if (keys1.length !== keys2.length) return false;
         for (const key of keys1) {
-            if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) {
-                return false;
-            }
+            if (!keys2.includes(key) || !deepEqual(obj1[key], obj2[key])) return false;
         }
         return true;
     };
@@ -53,9 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const updateSaveButtonState = () => {
-        chrome.storage.local.get('presets', ({ presets }) => {
-            if (!presets || presets.length === 0 || !activePresetState) {
-                UI.savePresetBtn.disabled = true;
+        if (isProgrammaticUpdate) return;
+        chrome.storage.local.get('activePresetIndex', ({ activePresetIndex }) => {
+            if (activePresetIndex === -1 || activePresetIndex === undefined) {
+                UI.savePresetBtn.disabled = false;
                 return;
             }
             const currentState = getCurrentUiState();
@@ -70,8 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.searchToggle, UI.urlContextToggle
         ];
         inputs.forEach(el => {
-            el.addEventListener('input', updateSaveButtonState);
-            el.addEventListener('change', updateSaveButtonState);
+            const eventType = el.type === 'range' || el.type === 'textarea' ? 'input' : 'change';
+            el.addEventListener(eventType, updateSaveButtonState);
         });
     };
 
@@ -81,9 +80,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const max = parseFloat(slider.max);
         if (isNaN(value)) value = min;
         value = Math.max(min, Math.min(max, value));
+        isProgrammaticUpdate = true;
         slider.value = value;
         textInput.value = value.toFixed(2);
         updateSliderTrack(slider);
+        isProgrammaticUpdate = false;
+        updateSaveButtonState();
     };
 
     const updateTextFromSlider = (slider, textInput) => {
@@ -101,11 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
         input.type = 'text';
         input.value = originalName;
         input.className = 'preset__name-input';
-        Object.assign(input.style, {
-            width: '100%', padding: '0', margin: '0', border: '1px solid var(--primary-accent)',
-            borderRadius: '4px', background: 'var(--surface-elevated)', color: 'var(--text-primary)',
-            fontFamily: 'inherit', fontSize: '13px', fontWeight: '500', outline: 'none', textAlign: 'left'
-        });
         span.replaceWith(input);
         input.focus();
         input.select();
@@ -116,59 +113,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 chrome.storage.local.get('presets', ({ presets }) => {
                     if (presets && presets[index]) {
                         presets[index].name = newName;
-                        chrome.storage.local.set({ presets }, loadPresets);
+                        chrome.storage.local.set({ presets }, () => renderUI());
                     }
                 });
             } else {
-                loadPresets();
+                renderUI();
             }
         };
 
         input.addEventListener('blur', save);
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') save();
-            if (e.key === 'Escape') loadPresets();
+            else if (e.key === 'Escape') renderUI();
         });
     };
 
     const handlePresetSelect = (index) => {
         chrome.storage.local.get('presets', ({ presets }) => {
             if (!presets?.[index]) return;
-            chrome.storage.local.set({ activePresetIndex: index });
-            applyPresetToPopup(presets[index]);
-            UI.presetsListContainer.querySelector('.selected')?.classList.remove('selected');
-            UI.presetsListContainer.querySelector(`[data-index="${index}"]`)?.classList.add('selected');
+            chrome.storage.local.set({ activePresetIndex: index }, () => {
+                applyPresetToPopup(presets[index]);
+                renderUI();
+            });
         });
     };
 
-    const loadPresets = () => {
+    const renderUI = () => {
         chrome.storage.local.get(['presets', 'activePresetIndex'], ({ presets = [], activePresetIndex }) => {
-            UI.savePresetBtn.textContent = 'Save';
-            UI.addNewPresetBtn.style.display = 'block';
-            UI.noPresetsMsg.style.display = presets.length === 0 ? 'block' : 'none';
+            const presetsExist = presets.length > 0;
+            UI.presetsSection.style.display = presetsExist ? 'block' : 'none';
+            UI.noPresetsMsg.style.display = presetsExist ? 'none' : 'block';
+            UI.addNewPresetBtn.style.display = presetsExist ? 'block' : 'none';
 
-            const fragment = document.createDocumentFragment();
-            presets.forEach((preset, index) => {
-                if (!preset?.name) return;
-                const li = document.createElement('li');
-                li.className = `preset ${index === activePresetIndex ? 'selected' : ''}`;
-                li.dataset.index = index;
-                li.innerHTML = `
-                    <span class="preset__name">${preset.name}</span>
-                    <div class="preset__actions">
-                        <button class="preset__action-button preset__action-button--delete" title="Delete preset">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                        </button>
-                    </div>`;
-                fragment.appendChild(li);
-            });
-            UI.presetsListContainer.innerHTML = '';
-            UI.presetsListContainer.appendChild(fragment);
+            if (presetsExist) {
+                UI.savePresetBtn.textContent = 'Save';
+                const fragment = document.createDocumentFragment();
+                presets.forEach((preset, index) => {
+                    if (!preset?.name) return;
+                    const li = document.createElement('li');
+                    li.className = `preset ${index === activePresetIndex ? 'selected' : ''}`;
+                    li.dataset.index = index;
+                    li.innerHTML = `
+                        <span class="preset__name">${preset.name}</span>
+                        <div class="preset__actions">
+                            <button class="preset__action-button preset__action-button--delete" title="Delete preset">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
+                        </div>`;
+                    fragment.appendChild(li);
+                });
+                UI.presetsListContainer.innerHTML = '';
+                UI.presetsListContainer.appendChild(fragment);
+            } else {
+                UI.savePresetBtn.textContent = 'Save as Preset';
+                UI.presetsListContainer.innerHTML = '';
+            }
             updateSaveButtonState();
         });
     };
 
     const applyStateToUI = (state) => {
+        isProgrammaticUpdate = true;
         UI.temperatureSlider.value = state.temperature;
         UI.topPSlider.value = state.topP;
         updateTextFromSlider(UI.temperatureSlider, UI.temperatureValueInput);
@@ -178,8 +183,13 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.codeExecutionToggle.checked = state.tools?.codeExecution ?? false;
         UI.searchToggle.checked = state.tools?.search ?? true;
         UI.urlContextToggle.checked = state.tools?.urlContext ?? false;
-        [UI.codeExecutionToggle, UI.searchToggle, UI.urlContextToggle].forEach(check => check.dispatchEvent(new Event('change', { bubbles: true })));
         UI.systemInstructionsTextarea.value = state.systemInstructions || '';
+        isProgrammaticUpdate = false;
+
+        UI.toolCards.forEach(card => {
+            const checkbox = document.getElementById(card.dataset.tool);
+            if (checkbox) card.classList.toggle('active', checkbox.checked);
+        });
     };
 
     const applyPresetToPopup = (preset) => {
@@ -196,9 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
             systemInstructions: ''
         };
         applyStateToUI(defaultState);
-        activePresetState = null;
-        UI.presetsListContainer.querySelector('.selected')?.classList.remove('selected');
-        chrome.storage.local.set({ activePresetIndex: -1 });
+        activePresetState = defaultState;
+        chrome.storage.local.set({ activePresetIndex: -1 }, renderUI);
         updateSaveButtonState();
     };
 
@@ -220,20 +229,21 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.toolCards.forEach(card => {
         const checkbox = document.getElementById(card.dataset.tool);
         if (!checkbox) return;
-        const syncCardClass = () => card.classList.toggle('active', checkbox.checked);
-        checkbox.addEventListener('change', syncCardClass);
         card.addEventListener('click', (e) => {
             if (e.target.tagName !== 'INPUT') {
                 checkbox.checked = !checkbox.checked;
                 checkbox.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
+        checkbox.addEventListener('change', () => {
+             card.classList.toggle('active', checkbox.checked);
+             updateSaveButtonState();
+        });
     });
 
     UI.presetsListContainer.addEventListener('click', (e) => {
         const presetLi = e.target.closest('.preset');
         if (!presetLi || presetLi.querySelector('.preset__name-input')) return;
-
         const index = parseInt(presetLi.dataset.index, 10);
         if (isNaN(index)) return;
 
@@ -260,10 +270,9 @@ document.addEventListener('DOMContentLoaded', () => {
             presets.splice(deleteIndex, 1);
             const newActiveIndex = (activePresetIndex === deleteIndex) ? -1 : (activePresetIndex > deleteIndex ? activePresetIndex - 1 : activePresetIndex);
             chrome.storage.local.set({ presets, activePresetIndex: newActiveIndex }, () => {
-                if (newActiveIndex === -1) {
-                    resetToDefaults();
-                }
-                loadPresets();
+                if (newActiveIndex === -1) resetToDefaults();
+                else handlePresetSelect(newActiveIndex);
+                renderUI();
                 closeConfirmModal();
                 deleteIndex = -1;
             });
@@ -276,7 +285,6 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.deleteConfirmModal.addEventListener('click', (e) => e.target === UI.deleteConfirmModal && closeConfirmModal());
 
     UI.addNewPresetBtn.addEventListener('click', () => {
-        resetToDefaults();
         UI.presetNameModalInput.value = '';
         UI.savePresetModal.style.display = 'flex';
         UI.presetNameModalInput.focus();
@@ -284,7 +292,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     UI.savePresetBtn.addEventListener('click', () => {
         chrome.storage.local.get(['presets', 'activePresetIndex'], ({ presets = [], activePresetIndex }) => {
-            if (activePresetIndex !== undefined && activePresetIndex >= 0) {
+            if (presets.length > 0) { // Save existing preset
+                if (UI.savePresetBtn.disabled) return;
                 const currentState = getCurrentUiState();
                 presets[activePresetIndex] = { ...currentState, name: presets[activePresetIndex].name };
                 chrome.storage.local.set({ presets }, () => {
@@ -294,6 +303,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateSaveButtonState();
                     setTimeout(() => { UI.savePresetBtn.textContent = originalText; }, 1500);
                 });
+            } else { // Save as new preset (first one)
+                UI.presetNameModalInput.value = '';
+                UI.savePresetModal.style.display = 'flex';
+                UI.presetNameModalInput.focus();
             }
         });
     });
@@ -306,21 +319,23 @@ document.addEventListener('DOMContentLoaded', () => {
             presets.push(newPreset);
             chrome.storage.local.set({ presets, activePresetIndex: presets.length - 1 }, () => {
                 applyPresetToPopup(newPreset);
-                loadPresets();
+                renderUI();
                 closeSaveModal();
             });
         });
     });
 
-    (() => {
+    const init = () => {
         chrome.storage.local.get(['presets', 'activePresetIndex'], ({ presets = [], activePresetIndex }) => {
             if (presets.length > 0 && activePresetIndex >= 0 && activePresetIndex < presets.length) {
                 applyPresetToPopup(presets[activePresetIndex]);
             } else {
                 resetToDefaults();
             }
-            loadPresets();
+            renderUI();
             setupChangeListeners();
         });
-    })();
+    };
+
+    init();
 });

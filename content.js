@@ -2,7 +2,7 @@
     if (window.geminiWorkerRunning) return;
     window.geminiWorkerRunning = true;
 
-    const selectors = {
+    const SELECTORS = {
         modelTitle: 'ms-model-selector-v3 .title',
         tempSlider: 'div[data-test-id="temperatureSliderContainer"] mat-slider input[type="range"]',
         topPSlider: 'ms-slider[title*="Top P"] input[type="range"]',
@@ -14,11 +14,22 @@
         systemInstructionsTextarea: 'textarea[aria-label="System instructions"]',
         promptInput: 'textarea[aria-label*="Type something"]',
         slidingPanel: '.ms-sliding-right-panel-dialog',
+        chatContainer: '.chat-view-container',
+        messageTurn: 'ms-turn',
     };
 
     let modelChangeObserver = null;
     let isApplyingSettings = false;
     let lastModelName = '';
+
+    const debounce = (func, delay) => {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    };
 
     const waitForElement = (selector, callback, timeout = 5000) => {
         const startTime = Date.now();
@@ -30,24 +41,12 @@
             } else if (Date.now() - startTime > timeout) {
                 clearInterval(interval);
             }
-        }, 50);
-    };
-
-    const waitForElementToDisappear = (selector, callback, timeout = 5000) => {
-        const startTime = Date.now();
-        const interval = setInterval(() => {
-            if (!document.querySelector(selector)) {
-                clearInterval(interval);
-                callback();
-            } else if (Date.now() - startTime > timeout) {
-                clearInterval(interval);
-            }
-        }, 50);
+        }, 100);
     };
 
     const setSlider = (selector, value) => {
         const el = document.querySelector(selector);
-        if (el) {
+        if (el && parseFloat(el.value) !== value) {
             el.value = value;
             el.dispatchEvent(new Event('input', { bubbles: true }));
         }
@@ -61,94 +60,66 @@
     };
 
     const setSystemInstructions = (instructions, callback) => {
-        const openButton = document.querySelector(selectors.systemInstructionsOpenButton);
+        const openButton = document.querySelector(SELECTORS.systemInstructionsOpenButton);
         if (!openButton) {
             if (callback) callback();
             return;
         }
         openButton.click();
 
-        waitForElement(`${selectors.slidingPanel} ${selectors.systemInstructionsTextarea}`, (textarea) => {
-            const panel = textarea.closest(selectors.slidingPanel);
-            if (!panel) {
-                if (callback) callback();
-                return;
+        waitForElement(`${SELECTORS.slidingPanel} ${SELECTORS.systemInstructionsTextarea}`, (textarea) => {
+            if (textarea.value !== instructions) {
+                textarea.value = instructions;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
             }
-
-            textarea.value = instructions;
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-
-            const closeButton = panel.querySelector(selectors.systemInstructionsCloseButton);
-            if (closeButton) {
-                closeButton.click();
-            }
-
-            waitForElementToDisappear(selectors.slidingPanel, () => {
-                if (callback) callback();
-            });
+            const closeButton = textarea.closest(SELECTORS.slidingPanel)?.querySelector(SELECTORS.systemInstructionsCloseButton);
+            if (closeButton) closeButton.click();
+            
+            const checkPanelClosed = setInterval(() => {
+                if (!document.querySelector(SELECTORS.slidingPanel)) {
+                    clearInterval(checkPanelClosed);
+                    if (callback) callback();
+                }
+            }, 100);
         });
     };
 
     const applyPreset = (preset) => {
-        setSlider(selectors.tempSlider, preset.temperature);
-        setSlider(selectors.topPSlider, preset.topP);
-        setToggle(selectors.codeExecutionToggle, preset.tools.codeExecution);
-        setToggle(selectors.searchToggle, preset.tools.search);
-        setToggle(selectors.urlContextToggle, preset.tools.urlContext || false);
+        isApplyingSettings = true;
+        setSlider(SELECTORS.tempSlider, preset.temperature);
+        setSlider(SELECTORS.topPSlider, preset.topP);
+        setToggle(SELECTORS.codeExecutionToggle, preset.tools.codeExecution);
+        setToggle(SELECTORS.searchToggle, preset.tools.search);
+        setToggle(SELECTORS.urlContextToggle, preset.tools.urlContext || false);
         setSystemInstructions(preset.systemInstructions, () => {
-            const promptInput = document.querySelector(selectors.promptInput);
+            const promptInput = document.querySelector(SELECTORS.promptInput);
             if (promptInput) promptInput.focus();
             isApplyingSettings = false;
         });
     };
 
-    const resetToDefaults = () => {
-        setSlider(selectors.tempSlider, 1.0);
-        setSlider(selectors.topPSlider, 0.95);
-        setToggle(selectors.codeExecutionToggle, false);
-        setToggle(selectors.searchToggle, true);
-        setToggle(selectors.urlContextToggle, false);
-        setSystemInstructions('', () => {
-            const promptInput = document.querySelector(selectors.promptInput);
-            if (promptInput) promptInput.focus();
-            isApplyingSettings = false;
-        });
-    };
-
-    const evaluateAndApplySettings = () => {
+    const evaluateAndApplySettings = debounce(() => {
         if (isApplyingSettings) return;
 
-        const modelTitleEl = document.querySelector(selectors.modelTitle);
+        const modelTitleEl = document.querySelector(SELECTORS.modelTitle);
         if (!modelTitleEl) return;
         
         const modelName = modelTitleEl.textContent.trim().toLowerCase();
         if (modelName === lastModelName) return;
 
-        isApplyingSettings = true;
         lastModelName = modelName;
 
         chrome.storage.local.get(['presets', 'activePresetIndex'], (result) => {
-            if (modelName.includes('nano banana')) {
-                resetToDefaults();
-            } else {
-                if (result.presets && result.activePresetIndex !== undefined && result.activePresetIndex >= 0) {
-                    const preset = result.presets[result.activePresetIndex];
-                    if (preset) {
-                        applyPreset(preset);
-                    } else {
-                        isApplyingSettings = false;
-                    }
-                } else {
-                    isApplyingSettings = false;
-                }
+            if (result.presets && result.activePresetIndex !== undefined && result.activePresetIndex >= 0) {
+                const preset = result.presets[result.activePresetIndex];
+                if (preset) applyPreset(preset);
             }
         });
-    };
+    }, 300);
 
-    const initOptimization = (container) => {
-        const MESSAGE_TURN_SELECTOR = 'ms-turn';
+    const initVirtualization = (container) => {
         const VIRTUALIZATION_MAP = new WeakMap();
-        const BUFFER_PX = 500;
+        const BUFFER_PX = 1000;
 
         const intersectionObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
@@ -159,10 +130,7 @@
                 if (entry.isIntersecting) {
                     if (!state.isRealized) {
                         window.requestAnimationFrame(() => {
-                            if (state.content) {
-                                target.innerHTML = '';
-                                target.appendChild(state.content);
-                            }
+                            if (state.content) target.appendChild(state.content);
                             state.isRealized = true;
                         });
                     }
@@ -173,15 +141,9 @@
                             if (height > 0) {
                                 state.height = height;
                                 const contentFragment = document.createDocumentFragment();
-                                while (target.firstChild) {
-                                    contentFragment.appendChild(target.firstChild);
-                                }
+                                while (target.firstChild) contentFragment.appendChild(target.firstChild);
                                 state.content = contentFragment;
-
-                                const placeholder = document.createElement('div');
-                                placeholder.style.height = `${state.height}px`;
-                                target.innerHTML = '';
-                                target.appendChild(placeholder);
+                                target.style.height = `${state.height}px`;
                             }
                             state.isRealized = false;
                         });
@@ -194,91 +156,51 @@
         });
 
         const processNode = (node) => {
-            if (node.matches && node.matches(MESSAGE_TURN_SELECTOR)) {
-                VIRTUALIZATION_MAP.set(node, {
-                    isRealized: true,
-                    content: null,
-                    height: 0,
-                });
+            if (node.matches && node.matches(SELECTORS.messageTurn)) {
+                VIRTUALIZATION_MAP.set(node, { isRealized: true, content: null, height: 0 });
                 intersectionObserver.observe(node);
             }
         };
 
         const mutationObserver = new MutationObserver((mutationsList) => {
             for (const mutation of mutationsList) {
-                if (mutation.type === 'childList') {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === 1) {
-                            processNode(node);
-                            node.querySelectorAll(MESSAGE_TURN_SELECTOR).forEach(processNode);
-                        }
-                    });
-                    mutation.removedNodes.forEach(node => {
-                        if (node.nodeType === 1 && VIRTUALIZATION_MAP.has(node)) {
-                            intersectionObserver.unobserve(node);
-                            VIRTUALIZATION_MAP.delete(node);
-                        }
-                    });
-                }
+                if (mutation.type !== 'childList') continue;
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType !== 1) return;
+                    processNode(node);
+                    node.querySelectorAll(SELECTORS.messageTurn).forEach(processNode);
+                });
+                mutation.removedNodes.forEach(node => {
+                    if (node.nodeType === 1 && VIRTUALIZATION_MAP.has(node)) {
+                        intersectionObserver.unobserve(node);
+                        VIRTUALIZATION_MAP.delete(node);
+                    }
+                });
             }
         });
 
-        container.querySelectorAll(MESSAGE_TURN_SELECTOR).forEach(processNode);
-
-        mutationObserver.observe(container, {
-            childList: true,
-            subtree: true
-        });
+        container.querySelectorAll(SELECTORS.messageTurn).forEach(processNode);
+        mutationObserver.observe(container, { childList: true, subtree: true });
 
         window.addEventListener('beforeunload', () => {
             mutationObserver.disconnect();
             intersectionObserver.disconnect();
-            window.geminiOptimizerRunning = false;
         }, { once: true });
     };
 
-    const optimizeChatPerformance = () => {
-        if (window.geminiOptimizerRunning) return;
-        window.geminiOptimizerRunning = true;
-
-        const CHAT_CONTAINER_SELECTOR = '.chat-view-container';
-
-        waitForElement(CHAT_CONTAINER_SELECTOR, (chatContainer) => {
-            initOptimization(chatContainer);
-        }, 5000);
-    };
-
     const init = () => {
-        if (!window.location.href.includes('/prompts/')) {
-            window.geminiWorkerRunning = false;
-            return;
-        }
+        if (!window.location.href.includes('/prompts/')) return;
 
-        waitForElement(selectors.modelTitle, (modelTitleEl) => {
+        waitForElement(SELECTORS.modelTitle, (modelTitleEl) => {
             evaluateAndApplySettings();
-
-            if (modelChangeObserver) {
-                modelChangeObserver.disconnect();
-            }
-
+            if (modelChangeObserver) modelChangeObserver.disconnect();
             modelChangeObserver = new MutationObserver(evaluateAndApplySettings);
-
-            modelChangeObserver.observe(modelTitleEl, {
-                characterData: true,
-                childList: true,
-                subtree: true
-            });
+            modelChangeObserver.observe(modelTitleEl, { characterData: true, childList: true, subtree: true });
         });
 
-        optimizeChatPerformance();
-        window.geminiWorkerRunning = false;
+        waitForElement(SELECTORS.chatContainer, initVirtualization);
     };
 
-    window.addEventListener('beforeunload', () => {
-        if (modelChangeObserver) {
-            modelChangeObserver.disconnect();
-        }
-    }, { once: true });
-
     init();
+    window.geminiWorkerRunning = false;
 })();
