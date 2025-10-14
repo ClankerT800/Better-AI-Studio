@@ -14,9 +14,7 @@ Instantly apply your favorite AIstudio settings to avoid manual setup for each c
 
 Free via the Chrome Web Store (Recommended)👇
 
-————————————————
-Link coming soon
-————————————————
+https://chromewebstore.google.com/detail/pbpkchhkdpenkboinjfedafjaeefdnaf?utm_source=item-share-cb
 
 If you want to make changes, add more settings or change UI to your liking for example. You can:
 
