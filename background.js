@@ -1,28 +1,22 @@
-const TARGET_PAGE = 'https://aistudio.google.com/';
+const TARGET = 'https://aistudio.google.com/';
 
-const injectScript = (tabId) => {
+const inject = (tabId) => {
     chrome.scripting.executeScript({
-        target: { tabId: tabId },
+        target: { tabId },
         files: ['content.js']
     });
 };
 
-const isTargetPage = (url) => url && url.startsWith(TARGET_PAGE);
+const isTarget = (url) => url?.startsWith(TARGET);
 
 chrome.webNavigation.onCompleted.addListener((details) => {
-    if (isTargetPage(details.url) && details.frameId === 0) {
-        injectScript(details.tabId);
-    }
+    if (isTarget(details.url) && details.frameId === 0) inject(details.tabId);
 });
 
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
-    if (isTargetPage(details.url) && details.frameId === 0) {
-        injectScript(details.tabId);
-    }
+    if (isTarget(details.url) && details.frameId === 0) inject(details.tabId);
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && isTargetPage(tab.url)) {
-        injectScript(tabId);
-    }
+    if (changeInfo.status === 'complete' && isTarget(tab.url)) inject(tabId);
 });

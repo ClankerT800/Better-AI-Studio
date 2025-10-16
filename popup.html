@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Better AIstudio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,27 +16,31 @@
         </div>
         <h2 class="popup-header__title">Better AIstudio</h2>
         <div class="popup-header__actions">
-            <a href="https://x.com/ClankerT800" target="_blank" title="Follow on X">
+            <a href="https://x.com/ClankerT800" target="_blank" rel="noopener noreferrer" title="Follow on X">
                 <svg class="social-icon social-icon--x" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></svg>
             </a>
-            <a href="https://buymeacoffee.com/clankert800" target="_blank" title="Buy Me a Coffee">
-                <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee">
+            <a href="https://buymeacoffee.com/clankert800" target="_blank" rel="noopener noreferrer" title="Buy Me a Coffee">
+                <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" loading="lazy">
             </a>
         </div>
     </header>
     <main class="popup-content">
+        <section class="setting setting--system-instructions">
+            <label for="system-instructions-textarea">System Instructions</label>
+            <textarea id="system-instructions-textarea" rows="4" aria-label="System instructions textarea" maxlength="1000"></textarea>
+        </section>
         <section class="setting">
             <label for="temperature-slider">Temperature</label>
             <div class="setting__slider">
-                <input type="range" id="temperature-slider" min="0" max="2" step="0.01" value="1.0">
-                <input type="text" id="temperature-value-input" class="setting__slider-value" value="1.00">
+                <input type="range" id="temperature-slider" min="0" max="2" step="0.01" value="1.0" aria-label="Temperature slider">
+                <input type="text" id="temperature-value-input" class="setting__slider-value" value="1.00" inputmode="decimal">
             </div>
         </section>
         <section class="setting">
             <label for="top-p-slider">Top P</label>
             <div class="setting__slider">
-                <input type="range" id="top-p-slider" min="0" max="1" step="0.01" value="0.95">
-                <input type="text" id="top-p-value-input" class="setting__slider-value" value="0.95">
+                <input type="range" id="top-p-slider" min="0" max="1" step="0.01" value="0.95" aria-label="Top P slider">
+                <input type="text" id="top-p-value-input" class="setting__slider-value" value="0.95" inputmode="decimal">
             </div>
         </section>
         <section class="setting setting--tools">
@@ -45,44 +50,35 @@
                 <div class="tool active" data-tool="search-toggle"><div class="tool__header"><span class="tool__name">Search</span><div class="tool__toggle"></div></div></div>
                 <div class="tool tool--full-width" data-tool="url-context-toggle"><div class="tool__header"><span class="tool__name">URL Context</span><div class="tool__toggle"></div></div></div>
             </div>
-            <div class="checkbox-group">
-                <label><input type="checkbox" id="code-execution-toggle"> Code</label>
-                <label><input type="checkbox" id="search-toggle" checked> Search</label>
-                <label><input type="checkbox" id="url-context-toggle"> URL Context</label>
-            </div>
         </section>
-        <section class="setting setting--system-instructions">
-            <label for="system-instructions-textarea">System Instructions</label>
-            <textarea id="system-instructions-textarea" rows="4"></textarea>
-        </section>
-        <button id="save-preset-btn">Save Preset</button>
+        <button id="save-preset-btn" type="button">Save Preset</button>
         <div class="presets-section">
             <h3>Your Presets</h3>
-            <ul id="presets-list-container"></ul>
-            <button id="add-new-preset-btn">Add New Preset</button>
+            <p id="no-presets-msg">You don't have any presets yet.</p>
+            <ul id="presets-list-container" role="list"></ul>
+            <button id="add-new-preset-btn" type="button">Add New Preset</button>
         </div>
-        <p id="no-presets-msg">You don't have any presets yet.</p>
     </main>
-    <div id="save-preset-modal" class="modal">
+    <div id="save-preset-modal" class="modal" role="dialog" aria-labelledby="save-preset-modal-title" aria-hidden="true">
         <div class="modal__content">
             <h4 id="save-preset-modal-title">Add New Preset</h4>
-            <input type="text" id="preset-name-modal-input" placeholder="Enter preset name" autocomplete="off">
+            <input type="text" id="preset-name-modal-input" placeholder="Enter preset name" autocomplete="off" maxlength="50">
             <div class="modal__actions">
-                <button id="save-preset-modal-cancel-btn">Cancel</button>
-                <button id="save-preset-modal-save-btn">Save</button>
+                <button id="save-preset-modal-cancel-btn" type="button">Cancel</button>
+                <button id="save-preset-modal-save-btn" type="button">Save</button>
             </div>
         </div>
     </div>
-    <div id="delete-confirm-modal" class="modal">
+    <div id="delete-confirm-modal" class="modal" role="dialog" aria-labelledby="delete-confirm-title" aria-hidden="true">
         <div class="modal__content">
-            <h4>Delete Preset</h4>
+            <h4 id="delete-confirm-title">Delete Preset</h4>
             <p>Are you sure you want to delete this preset? This action cannot be undone.</p>
             <div class="modal__actions">
-                <button id="delete-confirm-modal-cancel-btn">Cancel</button>
-                <button id="delete-confirm-modal-confirm-btn">Delete</button>
+                <button id="delete-confirm-modal-cancel-btn" type="button">Cancel</button>
+                <button id="delete-confirm-modal-confirm-btn" type="button">Delete</button>
             </div>
         </div>
     </div>
-    <script src="popup.js"></script>
+    <script src="popup.js" defer></script>
 </body>
 </html>
