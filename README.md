@@ -37,6 +37,7 @@ And all that without affecting the performance of AI studio, if anything it make
 Free via the Chrome Web Store (Recommended)👇
 
 https://chromewebstore.google.com/detail/pbpkchhkdpenkboinjfedafjaeefdnaf?utm_source=item-share-cb
+https://chromewebstore.google.com/detail/pbpkchhkdpenkboinjfedafjaeefdnaf?utm_source=item-share-cb
 
 If you want to make changes, add more settings or change UI to your liking for example. You can:
 
