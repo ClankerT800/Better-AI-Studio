@@ -5,7 +5,7 @@
     const SELECTORS = {
         modelTitle: 'ms-model-selector-v3 .title',
         tempSlider: 'div[data-test-id="temperatureSliderContainer"] mat-slider input[type="range"]',
-        topPSlider: 'input[type="range"][aria-label*="Top P"], input[type="range"][title*="Top P"], ms-slider[title*="Top P"] input[type="range"], .slider-container input[type="range"]:nth-of-type(2)',
+        topPSlider: 'div[data-test-id="topPSliderContainer"] input[type="range"], .advanced-settings input[type="range"][step="0.05"][max="1"], .settings-item-column input[type="range"][step="0.05"][max="1"]',
         codeToggle: 'mat-slide-toggle.code-execution-toggle button',
         searchToggle: 'mat-slide-toggle.search-as-a-tool-toggle button',
         urlToggle: 'div[data-test-id="browseAsAToolTooltip"] button[role="switch"]',
@@ -77,29 +77,47 @@
         $.applying = true;
         $.cache.clear();
 
-        const temp = getEl(SELECTORS.tempSlider);
-        const topP = getEl(SELECTORS.topPSlider);
-        const code = getEl(SELECTORS.codeToggle);
-        const search = getEl(SELECTORS.searchToggle);
-        const url = getEl(SELECTORS.urlToggle);
+        const expandSections = () => {
+            const toolsHeader = Array.from(document.querySelectorAll('.settings-group-header')).find(h => 
+                h.querySelector('.group-title')?.textContent.includes('Tools'));
+            const advancedHeader = Array.from(document.querySelectorAll('.settings-group-header')).find(h => 
+                h.querySelector('.group-title')?.textContent.includes('Advanced'));
+            
+            if (toolsHeader && !document.querySelector(SELECTORS.codeToggle)) {
+                toolsHeader.click();
+            }
+            if (advancedHeader && !document.querySelector(SELECTORS.topPSlider)) {
+                advancedHeader.click();
+            }
+        };
 
-        if (temp && Math.abs(parseFloat(temp.value) - p.temperature) > 0.001) {
-            temp.value = p.temperature;
-            temp.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        if (topP && Math.abs(parseFloat(topP.value) - p.topP) > 0.001) {
-            topP.value = p.topP;
-            topP.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        if (code && (code.getAttribute('aria-checked') === 'true') !== p.tools.codeExecution) {
-            code.click();
-        }
-        if (search && (search.getAttribute('aria-checked') === 'true') !== p.tools.search) {
-            search.click();
-        }
-        if (url && (url.getAttribute('aria-checked') === 'true') !== (p.tools.urlContext || false)) {
-            url.click();
-        }
+        expandSections();
+        
+        setTimeout(() => {
+            const temp = getEl(SELECTORS.tempSlider);
+            const topP = getEl(SELECTORS.topPSlider);
+            const code = getEl(SELECTORS.codeToggle);
+            const search = getEl(SELECTORS.searchToggle);
+            const url = getEl(SELECTORS.urlToggle);
+
+            if (temp && Math.abs(parseFloat(temp.value) - p.temperature) > 0.001) {
+                temp.value = p.temperature;
+                temp.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (topP && Math.abs(parseFloat(topP.value) - p.topP) > 0.001) {
+                topP.value = p.topP;
+                topP.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (code && (code.getAttribute('aria-checked') === 'true') !== p.tools.codeExecution) {
+                code.click();
+            }
+            if (search && (search.getAttribute('aria-checked') === 'true') !== p.tools.search) {
+                search.click();
+            }
+            if (url && (url.getAttribute('aria-checked') === 'true') !== (p.tools.urlContext || false)) {
+                url.click();
+            }
+        }, 100);
 
         const btn = getEl(SELECTORS.sysBtn);
         if (btn) {

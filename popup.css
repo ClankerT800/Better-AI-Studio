@@ -46,6 +46,8 @@
 html {
   font-size: 13px;
   -webkit-text-size-adjust: 100%;
+  overflow: hidden;
+  background: var(--bg);
 }
 
 body {
@@ -68,22 +70,21 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 0px;
+  height: 0px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--sf);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bd);
-  border-radius: var(--border-radius-sm);
-  border: 2px solid var(--sf);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--t3);
+  background: transparent;
 }
 
 .popup-header {
