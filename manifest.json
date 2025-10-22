@@ -20,5 +20,11 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["themes/theme-config.json"],
+      "matches": ["https://aistudio.google.com/*"]
+    }
+  ]
 }

@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
     if (window.geminiWorkerRunning) return;
     window.geminiWorkerRunning = true;
 
@@ -18,7 +18,11 @@
         turn: 'ms-turn',
         modalDialog: 'mat-mdc-dialog-container',
         modalRow: 'ms-model-carousel-row',
-        modalContentBtn: 'ms-model-carousel-row .content-button'
+        modalContentBtn: 'ms-model-carousel-row .content-button',
+        accountSwitcher: '.account-switcher-text',
+        userName: '.name',
+        accountDropdown: '[class*="account"], [class*="profile"], [class*="user"]',
+        dropdownTrigger: 'button[aria-expanded], [role="button"]:has(.account-switcher-text), button[class*="account"], button[aria-label*="Account"], button[aria-label*="Profile"]'
     };
 
     if (!window.$BAS) {
@@ -27,8 +31,7 @@
             rafs: new Set(),
             obs: new Set(),
             applying: false,
-            preset: null,
-            applyQueue: []
+            preset: null
         };
     }
 
@@ -78,9 +81,10 @@
         $.cache.clear();
 
         const expandSections = () => {
-            const toolsHeader = Array.from(document.querySelectorAll('.settings-group-header')).find(h => 
+            const headers = document.querySelectorAll('.settings-group-header');
+            const toolsHeader = Array.from(headers).find(h => 
                 h.querySelector('.group-title')?.textContent.includes('Tools'));
-            const advancedHeader = Array.from(document.querySelectorAll('.settings-group-header')).find(h => 
+            const advancedHeader = Array.from(headers).find(h => 
                 h.querySelector('.group-title')?.textContent.includes('Advanced'));
             
             if (toolsHeader && !document.querySelector(SELECTORS.codeToggle)) {
@@ -231,7 +235,7 @@
     const observeUrl = () => {
         let lastUrl = location.href;
         let lastTitle = document.title;
-        
+
         const urlObs = new MutationObserver(() => {
             if (location.href !== lastUrl || document.title !== lastTitle) {
                 lastUrl = location.href;
@@ -239,48 +243,45 @@
                 setTimeout(() => {
                     observeModel();
                     observeModal();
+                    observeAccountSwitcher();
                     queueApply();
                 }, 200);
             }
         });
-        urlObs.observe(document.querySelector('title') || document.head, { childList: true, subtree: true });
+
+        const titleElement = document.querySelector('title') || document.head;
+        urlObs.observe(titleElement, { childList: true, subtree: true });
         $.obs.add(urlObs);
 
-        const setupAllLinks = () => {
-            const allLinks = document.querySelectorAll('a');
-            allLinks.forEach(link => {
-                if (!link.dataset.bas && (link.href.includes('/prompts/') || link.href.includes('/library') || link.href.includes('aistudio.google.com'))) {
-                    link.dataset.bas = '1';
-                    link.addEventListener('click', () => {
-                        setTimeout(() => {
-                            observeModel();
-                            observeModal();
-                            queueApply();
-                        }, 200);
-                    });
-                }
-            });
-        };
-
-        const setupAllButtons = () => {
-            const allButtons = document.querySelectorAll('button');
-            allButtons.forEach(btn => {
-                if (!btn.dataset.bas && (btn.textContent.includes('Back') || btn.textContent.includes('Previous') || btn.getAttribute('aria-label')?.includes('back'))) {
-                    btn.dataset.bas = '1';
-                    btn.addEventListener('click', () => {
-                        setTimeout(() => {
-                            observeModel();
-                            observeModal();
-                            queueApply();
-                        }, 200);
-                    });
-                }
-            });
-        };
-
         const setupNavigation = () => {
-            setupAllLinks();
-            setupAllButtons();
+            const handleNavigation = () => {
+                setTimeout(() => {
+                    observeModel();
+                    observeModal();
+                    observeAccountSwitcher();
+                    queueApply();
+                }, 200);
+            };
+
+            document.querySelectorAll('a').forEach(link => {
+                if (!link.dataset.bas &&
+                    (link.href.includes('/prompts/') ||
+                     link.href.includes('/library') ||
+                     link.href.includes('aistudio.google.com'))) {
+                    link.dataset.bas = '1';
+                    link.addEventListener('click', handleNavigation);
+                }
+            });
+
+            document.querySelectorAll('button').forEach(btn => {
+                if (!btn.dataset.bas &&
+                    (btn.textContent.includes('Back') ||
+                     btn.textContent.includes('Previous') ||
+                     btn.getAttribute('aria-label')?.includes('back'))) {
+                    btn.dataset.bas = '1';
+                    btn.addEventListener('click', handleNavigation);
+                }
+            });
         };
 
         setupNavigation();
@@ -292,155 +293,296 @@
         const origForward = history.forward;
         const origGo = history.go;
 
-        history.pushState = function() {
-            origPush.apply(this, arguments);
+        const handleNavigation = () => {
             setTimeout(() => {
                 observeModel();
                 observeModal();
+                observeAccountSwitcher();
                 queueApply();
             }, 200);
+        };
+
+        history.pushState = function() {
+            origPush.apply(this, arguments);
+            handleNavigation();
         };
 
         history.replaceState = function() {
             origReplace.apply(this, arguments);
-            setTimeout(() => {
-                observeModel();
-                observeModal();
-                queueApply();
-            }, 200);
+            handleNavigation();
         };
 
         history.back = function() {
             origBack.apply(this, arguments);
-            setTimeout(() => {
-                observeModel();
-                observeModal();
-                queueApply();
-            }, 200);
+            handleNavigation();
         };
 
         history.forward = function() {
             origForward.apply(this, arguments);
-            setTimeout(() => {
-                observeModel();
-                observeModal();
-                queueApply();
-            }, 200);
+            handleNavigation();
         };
 
         history.go = function() {
             origGo.apply(this, arguments);
-            setTimeout(() => {
-                observeModel();
-                observeModal();
-                queueApply();
-            }, 200);
+            handleNavigation();
         };
 
-        window.addEventListener('popstate', () => {
-            setTimeout(() => {
-                observeModel();
-                observeModal();
-                queueApply();
-            }, 200);
-        });
-
-        window.addEventListener('beforeunload', () => {
-            setTimeout(() => {
-                observeModel();
-                observeModal();
-                queueApply();
-            }, 200);
-        });
+        window.addEventListener('popstate', handleNavigation);
+        window.addEventListener('beforeunload', handleNavigation);
     };
 
-    const virtualizeChat = (container) => {
-        const elementMap = new WeakMap();
-        let pendingOperations = [];
-        let rafId = null;
+    const observeAccountSwitcher = () => {
+        const accountObs = new MutationObserver(() => {
+            // INSTANT replacement - no delays whatsoever
+            replaceAccountEmailWithName();
+        });
 
-        const processOperations = () => {
-            if (!pendingOperations.length) return;
-            const batch = pendingOperations.splice(0);
-            batch.forEach(({ target, state, action }) => {
-                if (action === 'on' && state.content) {
-                    target.appendChild(state.content);
-                    state.rendered = true;
-                } else if (action === 'off') {
-                    const height = target.offsetHeight;
-                    if (height > 0) {
-                        state.height = height;
-                        const fragment = document.createDocumentFragment();
-                        while (target.firstChild) fragment.appendChild(target.firstChild);
-                        state.content = fragment;
-                        target.style.height = `${height}px`;
-                        state.rendered = false;
+        // Observe the entire document for INSTANT changes to account switcher and name elements
+        accountObs.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'id', 'data-testid', 'aria-label'],
+            characterData: true
+        });
+        $.obs.add(accountObs);
+
+        // INSTANT check - happens immediately with zero delay
+        replaceAccountEmailWithName();
+    };
+
+    const replaceAccountEmailWithName = () => {
+        // INSTANT DOM queries - no caching delays
+        const accountSwitcher = document.querySelector(SELECTORS.accountSwitcher);
+        const userName = document.querySelector(SELECTORS.userName);
+
+        if (accountSwitcher && userName) {
+            // Only replace if it contains an email (has @ symbol) and we have a name
+            if (accountSwitcher.textContent.includes('@') && userName.textContent.trim()) {
+                accountSwitcher.textContent = userName.textContent.trim();
+                return;
+            }
+        }
+
+        // If we don't have both elements or the account switcher doesn't have email,
+        // try to automatically trigger the dropdown to reveal the name
+        const currentAccountSwitcher = document.querySelector(SELECTORS.accountSwitcher);
+        if (currentAccountSwitcher && currentAccountSwitcher.textContent.includes('@')) {
+            triggerAccountDropdown();
+        }
+    };
+
+    const triggerAccountDropdown = () => {
+        // INSTANT DOM query - no caching
+        const accountSwitcher = document.querySelector(SELECTORS.accountSwitcher);
+        if (!accountSwitcher) return;
+
+        // Look for dropdown triggers in order of specificity
+        const triggers = [
+            // Most specific: account switcher container with button
+            accountSwitcher.closest('[class*="account-switcher"]')?.querySelector('button'),
+            accountSwitcher.closest('[class*="profile"]')?.querySelector('button'),
+            // Parent elements that might be clickable
+            accountSwitcher.closest('button'),
+            accountSwitcher.closest('[role="button"]'),
+            // Common account dropdown selectors
+            document.querySelector('button[aria-label*="Account"]'),
+            document.querySelector('button[aria-label*="Profile"]'),
+            document.querySelector('button[class*="account"]'),
+            document.querySelector('button[class*="profile"]'),
+            document.querySelector('[class*="account-dropdown"] button'),
+            document.querySelector('[class*="profile-dropdown"] button'),
+            // Look for any button in the same container as the account switcher
+            accountSwitcher.closest('[class*="header"], [class*="nav"], [class*="toolbar"]')?.querySelector('button')
+        ].filter(Boolean);
+
+        // Try to find the name first before clicking - INSTANT check
+        let nameElement = findNameInDropdown();
+        if (nameElement && nameElement.textContent.trim()) {
+            accountSwitcher.textContent = nameElement.textContent.trim();
+            return;
+        }
+
+        // Also check if name is already visible without dropdown interaction
+        const immediateNameCheck = [
+            document.querySelector('.name'),
+            document.querySelector('[class*="user"] [class*="name"]'),
+            document.querySelector('[class*="profile"] [class*="name"]'),
+            document.querySelector('[class*="account"] [class*="name"]')
+        ].find(el => el?.textContent.trim());
+
+        if (immediateNameCheck) {
+            accountSwitcher.textContent = immediateNameCheck.textContent.trim();
+            return;
+        }
+
+        // If no name found, try clicking triggers to reveal it - INSTANT
+        for (const trigger of triggers) {
+            if (trigger && trigger !== accountSwitcher) {
+                // Store original state
+                const wasExpanded = trigger.getAttribute('aria-expanded') === 'true';
+
+                // INSTANT click to open dropdown
+                trigger.click();
+
+                // INSTANT check for name after click - no delays
+                nameElement = findNameInDropdown();
+                if (nameElement && nameElement.textContent.trim()) {
+                    accountSwitcher.textContent = nameElement.textContent.trim();
+
+                    // INSTANT close the dropdown - no delays
+                    if (!wasExpanded) {
+                        closeAccountDropdown(trigger);
+                    }
+                    return;
+                }
+
+                break;
+            }
+        }
+    };
+
+    const findNameInDropdown = () => {
+        // INSTANT search - look for name in various possible locations within dropdowns
+        const possibleLocations = [
+            document.querySelector(SELECTORS.userName),
+            document.querySelector('.name'),
+            document.querySelector('[class*="name"]'),
+            document.querySelector('[class*="user-name"]'),
+            document.querySelector('[class*="display-name"]'),
+            document.querySelector('.dropdown .name'),
+            document.querySelector('[role="menu"] .name'),
+            document.querySelector('[role="listbox"] .name'),
+            document.querySelector('[class*="account"] .name'),
+            document.querySelector('[class*="profile"] .name'),
+            document.querySelector('[class*="user"] .name'),
+            // More specific selectors for common UI patterns
+            document.querySelector('[data-testid*="name"]'),
+            document.querySelector('[aria-label*="name"]'),
+            document.querySelector('.mat-mdc-menu-item .name'),
+            document.querySelector('.mdc-menu-surface .name')
+        ].filter(Boolean);
+
+        for (const element of possibleLocations) {
+            if (element.textContent.trim()) {
+                return element;
+            }
+        }
+        return null;
+    };
+
+    const closeAccountDropdown = (trigger) => {
+        // INSTANT close - try various methods with ZERO delays
+        const closeMethods = [
+            () => trigger.click(), // Click the same trigger to close
+            () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })),
+            () => document.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+            () => {
+                const closeButtons = document.querySelectorAll('button[aria-label*="Close"], button[class*="close"]');
+                for (const btn of closeButtons) {
+                    if (btn && btn !== trigger) {
+                        btn.click();
+                        break;
                     }
                 }
-            });
-            rafId = null;
-        };
-
-        const scheduleOperation = (target, state, action) => {
-            pendingOperations.push({ target, state, action });
-            if (!rafId) rafId = raf(processOperations);
-        };
-
-        const intersectionObserver = new IntersectionObserver((entries) => {
-            entries.forEach(({ target, isIntersecting }) => {
-                const state = elementMap.get(target);
-                if (!state) return;
-                if (isIntersecting && !state.rendered) scheduleOperation(target, state, 'on');
-                else if (!isIntersecting && state.rendered) scheduleOperation(target, state, 'off');
-            });
-        }, { root: container, rootMargin: '1500px' });
-
-        const processNode = (node) => {
-            if (node.matches?.(SELECTORS.turn)) {
-                elementMap.set(node, { rendered: true, content: null, height: 0 });
-                intersectionObserver.observe(node);
             }
-        };
+        ];
 
-        let mutationBatch = [];
-        let mutationRaf = null;
-
-        const processMutations = () => {
-            mutationBatch.forEach((mutation) => {
-                if (mutation.type !== 'childList') return;
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType !== 1) return;
-                    processNode(node);
-                    node.querySelectorAll?.(SELECTORS.turn).forEach(processNode);
-                });
-                mutation.removedNodes.forEach((node) => {
-                    if (node.nodeType === 1 && elementMap.has(node)) {
-                        intersectionObserver.unobserve(node);
-                        elementMap.delete(node);
-                    }
-                });
-            });
-            mutationBatch = [];
-            mutationRaf = null;
-        };
-
-        const mutationObserver = new MutationObserver((mutations) => {
-            mutationBatch.push(...mutations);
-            if (!mutationRaf) mutationRaf = raf(processMutations);
-        });
-
-        container.querySelectorAll(SELECTORS.turn).forEach(processNode);
-        mutationObserver.observe(container, { childList: true, subtree: true });
-        $.obs.add(mutationObserver);
-        $.obs.add(intersectionObserver);
-
-        window.addEventListener('beforeunload', () => {
-            mutationObserver.disconnect();
-            intersectionObserver.disconnect();
-            $.obs.delete(mutationObserver);
-            $.obs.delete(intersectionObserver);
-        }, { once: true, passive: true });
+        // Try each method INSTANTLY
+        for (const method of closeMethods) {
+            try {
+                method();
+                break;
+            } catch (e) {
+                // Continue to next method if one fails
+            }
+        }
     };
+
+    class SmartThemeEngine {
+        constructor() {
+            this.styleEl = null;
+            this.currentThemeId = null;
+            this.config = null;
+        }
+
+        async init() {
+            await this.loadConfig();
+            await this.loadTheme();
+        }
+
+        async loadConfig() {
+            try {
+                const response = await fetch(chrome.runtime.getURL('themes/theme-config.json'));
+                this.config = await response.json();
+            } catch (e) {
+                console.log('Config load failed');
+                this.config = this.getDefaultConfig();
+            }
+        }
+
+        getDefaultConfig() {
+            return {
+                version: "3.0.0",
+                themes: {},
+                css: {
+                    baseVariables: "",
+                    websiteOverrides: "",
+                    selectors: {}
+                }
+            };
+        }
+
+        async loadTheme() {
+            try {
+                const data = await chrome.storage.sync.get('settings');
+                const settings = data.settings || {};
+                const themeId = settings.currentTheme || 'monochrome';
+
+                const theme = this.config.themes[themeId] || this.config.themes.monochrome;
+                await this.applyTheme(theme);
+                this.currentThemeId = themeId;
+            } catch (e) {
+                console.log('Theme load error');
+            }
+        }
+
+        async applyTheme(theme) {
+            const css = await this.generateSmartCSS(theme);
+            if (!this.styleEl) {
+                this.styleEl = document.createElement('style');
+                this.styleEl.id = 'better-aistudio-theme';
+                document.head.appendChild(this.styleEl);
+            }
+            this.styleEl.textContent = css;
+        }
+
+        async generateSmartCSS(theme) {
+            const { primary, background, surface, text } = theme.base;
+            const radius = theme.radius || '8px';
+            const borderWidth = theme.borderWidth || '1px';
+
+            // Load CSS from theme-config.json
+            const response = await fetch(chrome.runtime.getURL('themes/theme-config.json'));
+            const config = await response.json();
+            const cssConfig = config.css;
+
+            // Replace placeholders in base variables
+            let baseVariables = cssConfig.baseVariables
+                .replace('${primary}', primary)
+                .replace('${background}', background)
+                .replace('${surface}', surface)
+                .replace('${text}', text)
+                .replace('${radius}', radius)
+                .replace('${borderWidth}', borderWidth);
+
+            // Combine all CSS selectors including the new accountSwitcher
+            const allSelectors = Object.values(cssConfig.selectors).join('\n\n');
+            const accountSwitcherCSS = cssConfig.selectors.accountSwitcher || '.account-switcher-text { color: var(--bas-text) !important; font-weight: 500 !important; transition: none !important; animation: none !important; opacity: 1 !important; transform: none !important; pointer-events: auto !important; }';
+
+            return `${baseVariables}\n\n${cssConfig.websiteOverrides}\n\n${allSelectors}\n\n${accountSwitcherCSS}`;
+        }
+    }
 
     const init = () => {
         chrome.storage.local.get(['presets', 'activePresetIndex'], (r) => {
@@ -460,18 +602,36 @@
             }
         });
 
-        if (!window.location.href.includes('/prompts/')) return;
+        if (window.location.href.includes('/prompts/')) {
+            observeModel();
+            observeModal();
+            observeUrl();
+            setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
+        }
 
-        observeModel();
-        observeModal();
-        observeUrl();
-        wait(SELECTORS.chat, virtualizeChat);
+        // INSTANT execution - start immediately with zero delays
+        observeAccountSwitcher();
 
-        setTimeout(() => {
-            if ($.preset) {
-                raf(() => apply($.preset));
+        // INSTANT multiple checks to catch the element as soon as it appears
+        replaceAccountEmailWithName();
+        // Use requestAnimationFrame for next tick - still instant but allows DOM to settle
+        requestAnimationFrame(replaceAccountEmailWithName);
+        requestAnimationFrame(() => requestAnimationFrame(replaceAccountEmailWithName));
+
+        const themeEngine = new SmartThemeEngine();
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => themeEngine.init());
+        } else {
+            themeEngine.init();
+        }
+
+        chrome.runtime.onMessage.addListener((message) => {
+            if (message.type === 'THEME_CHANGED') {
+                themeEngine.loadTheme();
+                // Re-run account switcher observer to apply new theme styles
+                observeAccountSwitcher();
             }
-        }, 200);
+        });
     };
 
     window.addEventListener('beforeunload', () => {
@@ -483,4 +643,4 @@
     }, { once: true, passive: true });
 
     init();
-})();
+})()

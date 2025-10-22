@@ -37,20 +37,19 @@ And all that without affecting the performance of AI studio, if anything it make
 Free via the Chrome Web Store (Recommended)👇
 
 https://chromewebstore.google.com/detail/pbpkchhkdpenkboinjfedafjaeefdnaf?utm_source=item-share-cb
-https://chromewebstore.google.com/detail/pbpkchhkdpenkboinjfedafjaeefdnaf?utm_source=item-share-cb
 
 If you want to make changes, add more settings or change UI to your liking for example. You can:
 
 1. Download the repository as a ZIP file.
 2. Unzip the file to a local directory.
 3. Make the changes you want.
-3. Open Chrome and navigate to `chrome://extensions`.
-4. Enable "Developer mode" in the top right corner.
-5. Click "Load unpacked" and select the directory of your new version.
+4. Open Chrome and navigate to `chrome://extensions`.
+5. Enable "Developer mode" in the top right corner.
+6. Click "Load unpacked" and select the directory of your new version.
 
 ## Support
 
 If you found Better AIstudio helpful, please consider giving it a nice rating. It takes less than a minute, and will help a lot ❤️
 
-If you want to show extra love, consider buying me a coffee to keep this project going! ☕
+If you want to show extra love, consider buying me a coffee to keep this project going! ☕ 
 <a href="https://buymeacoffee.com/clankert800" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40"></a>
