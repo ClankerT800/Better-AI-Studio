@@ -49,7 +49,7 @@ If you want to make changes, add more settings or change UI to your liking for e
 
 ## Support
 
-If you found Better AIstudio helpful, please consider giving it a (nice rating.)[https://chromewebstore.google.com/detail/better-aistudio/pbpkchhkdpenkboinjfedafjaeefdnaf/reviews?hl=en&authuser=0]
-It takes less than a minute, and will help a lot ❤️
+If you found Better AIstudio helpful, please consider giving it a [nice rating](https://chromewebstore.google.com/detail/better-aistudio/pbpkchhkdpenkboinjfedafjaeefdnaf/reviews?hl=en&authuser=0).  
+It takes less than a minute and will help a lot ❤️  
 
-If you want to show extra love, consider (buying me a coffee)[https://buymeacoffee.com/clankert800] to keep this project going! ☕ 
+If you want to show extra love, consider [buying me a coffee](https://buymeacoffee.com/clankert800) to keep this project going! ☕

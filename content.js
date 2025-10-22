@@ -4,7 +4,7 @@
     const SELECTORS = {
         modelTitle: 'ms-model-selector-v3 .title',
         tempSlider: 'div[data-test-id="temperatureSliderContainer"] mat-slider input[type="range"]',
-        topPSlider: 'div[data-test-id="topPSliderContainer"] input[type="range"], .advanced-settings input[type="range"][step="0.05"][max="1"], .settings-item-column input[type="range"][step="0.05"][max="1"]',
+        topPSlider: 'div[data-test-id="topPSliderContainer"] input[type="range"]',
         codeToggle: 'mat-slide-toggle.code-execution-toggle button',
         searchToggle: 'mat-slide-toggle.search-as-a-tool-toggle button',
         urlToggle: 'div[data-test-id="browseAsAToolTooltip"] button[role="switch"]',
@@ -24,13 +24,30 @@
         dropdownTrigger: 'button[aria-expanded], [role="button"]:has(.account-switcher-text), button[class*="account"], button[aria-label*="Account"], button[aria-label*="Profile"]'
     };
 
+    const ACCOUNT_NAME_SELECTOR = '#account-switcher .name, [id*="account-switcher"] .name, .account-switcher .name';
+
+    const SLIDER_QUERIES = {
+        temperature: [
+            'div[data-test-id="temperatureSliderContainer"] input[type="range"]',
+            'input[type="range"][aria-label*="temperature" i]',
+            'input[type="range"][aria-labelledby*="temperature" i]'
+        ],
+        topP: [
+            'div[data-test-id="topPSliderContainer"] input[type="range"]',
+            'input[type="range"][aria-label*="top p" i]',
+            'input[type="range"][aria-labelledby*="top-p" i]',
+            'input[type="range"][aria-labelledby*="topp" i]'
+        ]
+    };
+
     if (!window.$BAS) {
         window.$BAS = {
             cache: new Map(),
             rafs: new Set(),
             obs: new Set(),
             applying: false,
-            preset: null
+            preset: null,
+            accountNameInFlight: false
         };
     }
 
@@ -55,23 +72,194 @@
         return el;
     };
 
-    const wait = (sel, cb, ms = 5000) => {
+    const wait = (sel, cb, ms = 5000, onTimeout) => {
         const el = document.querySelector(sel);
         if (el) return cb(el);
+        let timeoutId;
         const obs = new MutationObserver(() => {
             const e = document.querySelector(sel);
             if (e) {
                 obs.disconnect();
                 $.obs.delete(obs);
+                clearTimeout(timeoutId);
                 cb(e);
             }
         });
         obs.observe(document.body, { childList: true, subtree: true });
         $.obs.add(obs);
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
             obs.disconnect();
             $.obs.delete(obs);
+            onTimeout?.();
         }, ms);
+    };
+
+    const getSliderContextText = (input) => {
+        if (!input) return '';
+        const pieces = [];
+        const ariaLabel = input.getAttribute('aria-label');
+        if (ariaLabel) pieces.push(ariaLabel);
+        const labelledBy = input.getAttribute('aria-labelledby');
+        if (labelledBy) {
+            labelledBy.split(/\s+/).forEach((id) => {
+                const labelEl = document.getElementById(id);
+                if (labelEl?.textContent) {
+                    pieces.push(labelEl.textContent);
+                }
+            });
+        }
+        const container = input.closest('.settings-item, .settings-item-column, .settings-item-row, [data-test-id], label, mat-form-field, .mat-mdc-form-field, .slider-container');
+        if (container?.textContent) {
+            pieces.push(container.textContent);
+        }
+        return pieces.join(' ').toLowerCase();
+    };
+
+    const sliderTypeFromElement = (input) => {
+        if (!input) return null;
+        const container = input.closest('[data-test-id]');
+        const testId = container?.dataset?.testId?.toLowerCase();
+        if (testId) {
+            if (testId.includes('temperature')) return 'temperature';
+            if (testId.includes('toppslider') || testId.includes('toppslidercontainer') || testId.includes('top-p')) {
+                return 'topP';
+            }
+        }
+        const context = getSliderContextText(input);
+        if (context.includes('temperature')) return 'temperature';
+        if (context.includes('top p') || context.includes('top-p')) return 'topP';
+        return null;
+    };
+
+    const findSliderByType = (type) => {
+        const selectors = SLIDER_QUERIES[type] ?? [];
+        for (const selector of selectors) {
+            const input = document.querySelector(selector);
+            if (input && sliderTypeFromElement(input) === type) {
+                return input;
+            }
+        }
+        const candidates = Array.from(
+            document.querySelectorAll(
+                'div[data-test-id] input[type="range"], input[type="range"][aria-label], input[type="range"][aria-labelledby]'
+            )
+        );
+        return candidates.find((input) => sliderTypeFromElement(input) === type) ?? null;
+    };
+
+    const sectionController = (() => {
+        const getToggle = (header) =>
+            header?.matches('button, [role="button"]')
+                ? header
+                : header?.querySelector('button, [role="button"]');
+
+        const getContent = (header) => {
+            const group = header?.closest('.settings-group');
+            return (
+                group?.querySelector('.settings-group-content') ??
+                header?.nextElementSibling ??
+                group?.querySelector('.settings-group-content') ??
+                null
+            );
+        };
+
+        const isExpanded = (header) => {
+            const toggle = getToggle(header);
+            if (!toggle) return false;
+            const attr = toggle.getAttribute('aria-expanded');
+            if (attr === 'true') return true;
+            if (attr === 'false') return false;
+            const group = header?.closest('.settings-group');
+            if (group?.classList.contains('expanded')) return true;
+            const content = getContent(header);
+            if (!content) return false;
+            if (content.hidden) return false;
+            const style = window.getComputedStyle(content);
+            return style.display !== 'none' && style.visibility !== 'hidden' && style.height !== '0px';
+        };
+
+        const expand = (header) => {
+            const toggle = getToggle(header);
+            if (!toggle || isExpanded(header)) return false;
+            let toggled = false;
+            const attempt = (tries = 0) => {
+                if (isExpanded(header) || tries > 2) return;
+                toggle.click();
+                toggled = true;
+                setTimeout(() => {
+                    if (!isExpanded(header)) {
+                        attempt(tries + 1);
+                    }
+                }, 140);
+            };
+            attempt(0);
+            return toggled;
+        };
+
+        const collapse = (header) => {
+            const toggle = getToggle(header);
+            if (!toggle || !isExpanded(header)) return false;
+            let toggled = false;
+            const attempt = (tries = 0) => {
+                if (!isExpanded(header) || tries > 2) return;
+                toggle.click();
+                toggled = true;
+                setTimeout(() => {
+                    if (isExpanded(header)) {
+                        attempt(tries + 1);
+                    }
+                }, 140);
+            };
+            attempt(0);
+            return toggled;
+        };
+
+        return { isExpanded, expand, collapse };
+    })();
+
+    const prepareSectionsForPreset = (preset) => {
+        const headers = Array.from(document.querySelectorAll('.settings-group-header'));
+        const matchHeader = (label) =>
+            headers.find((h) => h.querySelector('.group-title')?.textContent?.toLowerCase().includes(label));
+        const toolsHeader = matchHeader('tools');
+        const advancedHeader = matchHeader('advanced');
+
+        const headersToCollapse = new Set();
+        const markForCollapse = (header) => {
+            if (header) {
+                headersToCollapse.add(header);
+            }
+        };
+        const ensureOpen = (header) => {
+            if (!header) return;
+            if (!sectionController.isExpanded(header)) {
+                sectionController.expand(header);
+            }
+            markForCollapse(header);
+        };
+        const ensureClosedAfter = (header) => {
+            if (!header) return;
+            markForCollapse(header);
+        };
+
+        const expectsTopP = typeof preset?.topP === 'number' && !Number.isNaN(preset.topP);
+        const topPSlider = findSliderByType('topP');
+        const topPContainerExists = Boolean(document.querySelector('div[data-test-id="topPSliderContainer"]'));
+
+        const needsAdvancedOpen = (expectsTopP || topPContainerExists) && !topPSlider;
+        if (needsAdvancedOpen) {
+            ensureOpen(advancedHeader);
+        } else {
+            ensureClosedAfter(advancedHeader);
+        }
+
+        if (!sectionController.isExpanded(toolsHeader)) {
+            ensureOpen(toolsHeader);
+        } else {
+            ensureClosedAfter(toolsHeader);
+        }
+
+        return Array.from(headersToCollapse).filter(Boolean);
     };
 
     const apply = (p) => {
@@ -79,80 +267,264 @@
         $.applying = true;
         $.cache.clear();
 
-        const expandSections = () => {
-            const headers = document.querySelectorAll('.settings-group-header');
-            const toolsHeader = Array.from(headers).find(h => 
-                h.querySelector('.group-title')?.textContent.includes('Tools'));
-            const advancedHeader = Array.from(headers).find(h => 
-                h.querySelector('.group-title')?.textContent.includes('Advanced'));
-            
-            if (toolsHeader && !document.querySelector(SELECTORS.codeToggle)) {
-                toolsHeader.click();
-            }
-            if (advancedHeader && !document.querySelector(SELECTORS.topPSlider)) {
-                advancedHeader.click();
+        const inPresetContext = window.location.href.includes('/prompts/');
+        let needsRetry = false;
+        let finished = false;
+        let pendingTasks = 1;
+        let retryDelay = 120;
+
+        const requestRetry = (delay = 150) => {
+            if (!inPresetContext) return;
+            needsRetry = true;
+            retryDelay = Math.max(retryDelay, delay);
+        };
+
+        const complete = () => {
+            if (finished) return;
+            finished = true;
+            $.applying = false;
+            if (needsRetry) {
+                setTimeout(() => {
+                    if (!$.applying) {
+                        queueApply();
+                    }
+                }, retryDelay);
             }
         };
 
-        expandSections();
-        
+        const taskDone = () => {
+            pendingTasks -= 1;
+            if (pendingTasks <= 0) {
+                complete();
+            }
+        };
+
+        const addTask = () => {
+            pendingTasks += 1;
+        };
+
+        addTask();
         setTimeout(() => {
-            const temp = getEl(SELECTORS.tempSlider);
-            const topP = getEl(SELECTORS.topPSlider);
-            const code = getEl(SELECTORS.codeToggle);
-            const search = getEl(SELECTORS.searchToggle);
-            const url = getEl(SELECTORS.urlToggle);
+            const sectionsToRestore = prepareSectionsForPreset(p);
+            raf(() => {
+                const temperatureSlider = findSliderByType('temperature');
+                const topPSlider = findSliderByType('topP');
+                const code = getEl(SELECTORS.codeToggle);
+                const search = getEl(SELECTORS.searchToggle);
+                const url = getEl(SELECTORS.urlToggle);
 
-            if (temp && Math.abs(parseFloat(temp.value) - p.temperature) > 0.001) {
-                temp.value = p.temperature;
-                temp.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-            if (topP && Math.abs(parseFloat(topP.value) - p.topP) > 0.001) {
-                topP.value = p.topP;
-                topP.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-            if (code && (code.getAttribute('aria-checked') === 'true') !== p.tools.codeExecution) {
-                code.click();
-            }
-            if (search && (search.getAttribute('aria-checked') === 'true') !== p.tools.search) {
-                search.click();
-            }
-            if (url && (url.getAttribute('aria-checked') === 'true') !== (p.tools.urlContext || false)) {
-                url.click();
-            }
-        }, 100);
-
-        const btn = getEl(SELECTORS.sysBtn);
-        if (btn) {
-            btn.click();
-            wait(`${SELECTORS.panel} ${SELECTORS.sysText}`, (area) => {
-                if (area.value !== p.systemInstructions) {
-                    area.value = p.systemInstructions;
-                    area.dispatchEvent(new Event('input', { bubbles: true }));
+                if (!temperatureSlider) {
+                    requestRetry(220);
+                    wait(
+                        'div[data-test-id="temperatureSliderContainer"] input[type="range"]',
+                        () => {
+                            if (!$.applying) {
+                                queueApply();
+                            }
+                        },
+                        4000
+                    );
                 }
-                const close = area.closest(SELECTORS.panel)?.querySelector(SELECTORS.sysClose);
-                if (close) {
+
+                if (!topPSlider) {
+                    const topPContainerSelector = 'div[data-test-id="topPSliderContainer"]';
+                    const topPContainer = document.querySelector(topPContainerSelector);
+                    if (topPContainer) {
+                        wait(
+                            `${topPContainerSelector} input[type="range"]`,
+                            () => {
+                                if (!$.applying) {
+                                    queueApply();
+                                }
+                            },
+                            4000
+                        );
+                    } else {
+                        wait(
+                            topPContainerSelector,
+                            () => {
+                                if (!$.applying) {
+                                    queueApply();
+                                }
+                            },
+                            4000
+                        );
+                    }
+                }
+
+                const expectCodeToggle = Boolean(
+                    document.querySelector('mat-slide-toggle.code-execution-toggle')
+                );
+                if (!code && expectCodeToggle) {
+                    requestRetry(200);
+                    wait(
+                        'mat-slide-toggle.code-execution-toggle button',
+                        () => {
+                            if (!$.applying) {
+                                queueApply();
+                            }
+                        },
+                        4000
+                    );
+                } else if (!code) {
+                    wait(
+                        'mat-slide-toggle.code-execution-toggle',
+                        () => {
+                            if (!$.applying) {
+                                queueApply();
+                            }
+                        },
+                        4000
+                    );
+                }
+
+                const expectSearchToggle = Boolean(
+                    document.querySelector('mat-slide-toggle.search-as-a-tool-toggle')
+                );
+                if (!search && expectSearchToggle) {
+                    requestRetry(200);
+                    wait(
+                        'mat-slide-toggle.search-as-a-tool-toggle button',
+                        () => {
+                            if (!$.applying) {
+                                queueApply();
+                            }
+                        },
+                        4000
+                    );
+                } else if (!search) {
+                    wait(
+                        'mat-slide-toggle.search-as-a-tool-toggle',
+                        () => {
+                            if (!$.applying) {
+                                queueApply();
+                            }
+                        },
+                        4000
+                    );
+                }
+
+                const expectUrlToggle = Boolean(document.querySelector('div[data-test-id="browseAsAToolTooltip"]'));
+                if (!url && expectUrlToggle) {
+                    requestRetry(200);
+                    wait(
+                        SELECTORS.urlToggle,
+                        () => {
+                            if (!$.applying) {
+                                queueApply();
+                            }
+                        },
+                        4000
+                    );
+                } else if (!url) {
+                    wait(
+                        'div[data-test-id="browseAsAToolTooltip"]',
+                        () => {
+                            if (!$.applying) {
+                                queueApply();
+                            }
+                        },
+                        4000
+                    );
+                }
+
+                if (temperatureSlider && Math.abs(parseFloat(temperatureSlider.value) - p.temperature) > 0.001) {
+                    temperatureSlider.value = p.temperature;
+                    temperatureSlider.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (topPSlider && Math.abs(parseFloat(topPSlider.value) - p.topP) > 0.001) {
+                    topPSlider.value = p.topP;
+                    topPSlider.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (code && (code.getAttribute('aria-checked') === 'true') !== p.tools.codeExecution) {
+                    code.click();
+                }
+                if (search && (search.getAttribute('aria-checked') === 'true') !== p.tools.search) {
+                    search.click();
+                }
+                if (url && (url.getAttribute('aria-checked') === 'true') !== (p.tools.urlContext || false)) {
+                    url.click();
+                }
+
+                if (sectionsToRestore.length > 0) {
                     setTimeout(() => {
-                        close.click();
-                        const o = new MutationObserver(() => {
-                            if (!document.querySelector(SELECTORS.panel)) {
-                                o.disconnect();
-                                $.applying = false;
+                        sectionsToRestore.forEach((header) => {
+                            if (sectionController.isExpanded(header)) {
+                                sectionController.collapse(header);
                             }
                         });
-                        o.observe(document.body, { childList: true, subtree: true });
-                        setTimeout(() => {
-                            o.disconnect();
-                            $.applying = false;
-                        }, 1000);
-                    }, 50);
-                } else {
-                    $.applying = false;
+                    }, 140);
                 }
+
+                taskDone();
             });
+        }, 80);
+
+        const systemInstructions = (p.systemInstructions ?? '').trim();
+        const sysBtn = getEl(SELECTORS.sysBtn);
+
+        if (sysBtn && systemInstructions) {
+            addTask();
+            sysBtn.click();
+            let sysTaskCompleted = false;
+            const finishSystemTask = () => {
+                if (sysTaskCompleted) return;
+                sysTaskCompleted = true;
+                taskDone();
+            };
+            wait(
+                `${SELECTORS.panel} ${SELECTORS.sysText}`,
+                (area) => {
+                    if (sysTaskCompleted) return;
+                    if (area.value !== systemInstructions) {
+                        area.value = systemInstructions;
+                        area.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    const close = area.closest(SELECTORS.panel)?.querySelector(SELECTORS.sysClose);
+                    if (close) {
+                        setTimeout(() => {
+                            if (sysTaskCompleted) return;
+                            close.click();
+                            const observer = new MutationObserver(() => {
+                                if (!document.querySelector(SELECTORS.panel)) {
+                                    observer.disconnect();
+                                    finishSystemTask();
+                                }
+                            });
+                            observer.observe(document.body, { childList: true, subtree: true });
+                            setTimeout(() => {
+                                observer.disconnect();
+                                finishSystemTask();
+                            }, 800);
+                        }, 40);
+                    } else {
+                        finishSystemTask();
+                    }
+                },
+                2500,
+                () => {
+                    requestRetry(220);
+                    finishSystemTask();
+                }
+            );
         } else {
-            $.applying = false;
+            if (systemInstructions) {
+                requestRetry(220);
+            }
+            if (!sysBtn && systemInstructions) {
+                wait(
+                    SELECTORS.sysBtn,
+                    () => {
+                        if (!$.applying) {
+                            queueApply();
+                        }
+                    },
+                    4000
+                );
+            }
         }
+
+        taskDone();
     };
 
     const queueApply = () => {
@@ -330,47 +702,6 @@
         window.addEventListener('beforeunload', handleNavigation);
     };
 
-    const observeAccountSwitcher = () => {
-        const accountObs = new MutationObserver(() => {
-            // INSTANT replacement - no delays whatsoever
-            replaceAccountEmailWithName();
-        });
-
-        // Observe the entire document for INSTANT changes to account switcher and name elements
-        accountObs.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'id', 'data-testid', 'aria-label'],
-            characterData: true
-        });
-        $.obs.add(accountObs);
-
-        // INSTANT check - happens immediately with zero delay
-        replaceAccountEmailWithName();
-    };
-
-    const replaceAccountEmailWithName = () => {
-        // INSTANT DOM queries - no caching delays
-        const accountSwitcher = document.querySelector(SELECTORS.accountSwitcher);
-        const userName = document.querySelector(SELECTORS.userName);
-
-        if (accountSwitcher && userName) {
-            // Only replace if it contains an email (has @ symbol) and we have a name
-            if (accountSwitcher.textContent.includes('@') && userName.textContent.trim()) {
-                accountSwitcher.textContent = userName.textContent.trim();
-                return;
-            }
-        }
-
-        // If we don't have both elements or the account switcher doesn't have email,
-        // try to automatically trigger the dropdown to reveal the name
-        const currentAccountSwitcher = document.querySelector(SELECTORS.accountSwitcher);
-        if (currentAccountSwitcher && currentAccountSwitcher.textContent.includes('@')) {
-            triggerAccountDropdown();
-        }
-    };
-
     const recordOverlayState = (container) => ({
         container,
         style: container.getAttribute('style') ?? ''
@@ -398,133 +729,267 @@
         });
     };
 
-    const triggerAccountDropdown = () => {
-        // INSTANT DOM query - no caching
-        const accountSwitcher = document.querySelector(SELECTORS.accountSwitcher);
-        if (!accountSwitcher) return;
-
-        // Look for dropdown triggers in order of specificity
-        const triggers = [
-            // Most specific: account switcher container with button
-            accountSwitcher.closest('[class*="account-switcher"]')?.querySelector('button'),
-            accountSwitcher.closest('[class*="profile"]')?.querySelector('button'),
-            // Parent elements that might be clickable
-            accountSwitcher.closest('button'),
-            accountSwitcher.closest('[role="button"]'),
-            // Common account dropdown selectors
-            document.querySelector('button[aria-label*="Account"]'),
-            document.querySelector('button[aria-label*="Profile"]'),
-            document.querySelector('button[class*="account"]'),
-            document.querySelector('button[class*="profile"]'),
-            document.querySelector('[class*="account-dropdown"] button'),
-            document.querySelector('[class*="profile-dropdown"] button'),
-            // Look for any button in the same container as the account switcher
-            accountSwitcher.closest('[class*="header"], [class*="nav"], [class*="toolbar"]')?.querySelector('button')
-        ].filter(Boolean);
-
-        // Try to find the name first before clicking - INSTANT check
-        let nameElement = findNameInDropdown();
-        if (nameElement && nameElement.textContent.trim()) {
-            accountSwitcher.textContent = nameElement.textContent.trim();
-            return;
+    const removeOverlayNodes = (pane) => {
+        if (!pane || !pane.isConnected) return;
+        const boundingBox = pane.parentElement;
+        const container = boundingBox?.parentElement;
+        if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
+            boundingBox.remove();
+        } else {
+            pane.remove();
         }
-
-        // Also check if name is already visible without dropdown interaction
-        const immediateNameCheck = [
-            document.querySelector('.name'),
-            document.querySelector('[class*="user"] [class*="name"]'),
-            document.querySelector('[class*="profile"] [class*="name"]'),
-            document.querySelector('[class*="account"] [class*="name"]')
-        ].find(el => el?.textContent.trim());
-
-        if (immediateNameCheck) {
-            accountSwitcher.textContent = immediateNameCheck.textContent.trim();
-            return;
-        }
-
-        // If no name found, try clicking triggers to reveal it - INSTANT
-        for (const trigger of triggers) {
-            if (trigger && trigger !== accountSwitcher) {
-                const overlaySnapshot = maskOverlayContainer();
-                trigger.click();
-
-                const attemptNameExtraction = (attempt = 0) => {
-                    const nameElement = findNameInDropdown();
-                    if (nameElement && nameElement.textContent.trim()) {
-                        accountSwitcher.textContent = nameElement.textContent.trim();
-                        closeAccountDropdown(trigger);
-                        restoreOverlayContainer(overlaySnapshot);
-                        return;
-                    }
-                    if (attempt >= 2) {
-                        closeAccountDropdown(trigger);
-                        restoreOverlayContainer(overlaySnapshot);
-                        return;
-                    }
-                    requestAnimationFrame(() => attemptNameExtraction(attempt + 1));
-                };
-
-                requestAnimationFrame(() => attemptNameExtraction(0));
-                break;
-            }
+        if (container?.classList?.contains('cdk-overlay-container')) {
+            const orphanBackdrops = Array.from(container.querySelectorAll('.cdk-overlay-backdrop')).filter(
+                (backdrop) => !backdrop.previousElementSibling
+            );
+            orphanBackdrops.forEach((backdrop) => backdrop.remove());
         }
     };
 
-    const findNameInDropdown = () => {
-        // INSTANT search - look for name in various possible locations within dropdowns
-        const possibleLocations = [
-            document.querySelector(SELECTORS.userName),
-            document.querySelector('.name'),
-            document.querySelector('[class*="name"]'),
-            document.querySelector('[class*="user-name"]'),
-            document.querySelector('[class*="display-name"]'),
-            document.querySelector('.dropdown .name'),
-            document.querySelector('[role="menu"] .name'),
-            document.querySelector('[role="listbox"] .name'),
-            document.querySelector('[class*="account"] .name'),
-            document.querySelector('[class*="profile"] .name'),
-            document.querySelector('[class*="user"] .name'),
-            // More specific selectors for common UI patterns
-            document.querySelector('[data-testid*="name"]'),
-            document.querySelector('[aria-label*="name"]'),
-            document.querySelector('.mat-mdc-menu-item .name'),
-            document.querySelector('.mdc-menu-surface .name')
-        ].filter(Boolean);
+    const closeAccountOverlay = (trigger, overlayPane, done, allowForceClose = false) => {
+        const pane = overlayPane?.closest?.('.cdk-overlay-pane') ?? overlayPane;
+        const container = document.querySelector('.cdk-overlay-container');
+        let completed = false;
+        let observer;
 
-        for (const element of possibleLocations) {
-            if (element.textContent.trim()) {
-                return element;
-            }
+        const finish = () => {
+            if (completed) return;
+            completed = true;
+            observer?.disconnect();
+            done?.();
+        };
+
+        if (!pane || !pane.isConnected) {
+            finish();
+            return;
         }
-        return null;
+
+        observer = container
+            ? new MutationObserver(() => {
+                  if (!pane.isConnected) {
+                      finish();
+                  }
+              })
+            : null;
+
+        observer?.observe(container, { childList: true });
+
+        let attempt = 0;
+        const maxAttempts = 6;
+        const step = () => {
+            if (!pane.isConnected) {
+                finish();
+                return;
+            }
+
+            const actions =
+                attempt === 0
+                    ? [
+                          () => trigger.click(),
+                          () =>
+                              document.dispatchEvent(
+                                  new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+                              ),
+                          () => {
+                              const closeBtn = pane.querySelector(
+                                  'button[aria-label*="Close"], button[class*="close"]'
+                              );
+                              closeBtn?.click();
+                          }
+                      ]
+                    : [
+                          () =>
+                              document.dispatchEvent(
+                                  new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+                              )
+                      ];
+
+            actions.forEach((action) => {
+                try {
+                    action();
+                } catch (e) {
+                    // ignore and continue
+                }
+            });
+
+            attempt += 1;
+            requestAnimationFrame(() => {
+                if (!pane.isConnected) {
+                    finish();
+                } else if (attempt < maxAttempts) {
+                    step();
+                } else {
+                    if (allowForceClose) {
+                        removeOverlayNodes(pane);
+                    }
+                    finish();
+                }
+            });
+        };
+
+        step();
     };
 
-    const closeAccountDropdown = (trigger) => {
-        // INSTANT close - try various methods with ZERO delays
-        const closeMethods = [
-            () => trigger.click(), // Click the same trigger to close
-            () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })),
-            () => document.dispatchEvent(new MouseEvent('click', { bubbles: true })),
-            () => {
-                const closeButtons = document.querySelectorAll('button[aria-label*="Close"], button[class*="close"]');
-                for (const btn of closeButtons) {
-                    if (btn && btn !== trigger) {
-                        btn.click();
-                        break;
-                    }
+    const ensureAccountDisplayName = () => {
+        const label = document.querySelector(SELECTORS.accountSwitcher);
+        if (!label) return;
+
+        const labelText = label.textContent?.trim() ?? '';
+        if (!labelText.includes('@')) return;
+
+        if ($.accountNameInFlight) return;
+
+        const trigger =
+            label.closest('button') ||
+            label.closest('[role="button"]') ||
+            document.querySelector(SELECTORS.dropdownTrigger);
+
+        if (!trigger) return;
+
+        $.accountNameInFlight = true;
+        let finished = false;
+        let nameObserver = null;
+        let removalObserver = null;
+
+        const existingOverlayRoot = document.querySelector('#account-switcher');
+        const overlayAlreadyOpen = Boolean(existingOverlayRoot);
+        const overlaySnapshot = overlayAlreadyOpen ? null : maskOverlayContainer();
+
+        const cleanupObservers = () => {
+            nameObserver?.disconnect();
+            removalObserver?.disconnect();
+            nameObserver = null;
+            removalObserver = null;
+        };
+
+        const finalize = (overlayPane) => {
+            if (finished) return;
+            finished = true;
+            cleanupObservers();
+            const pane =
+                overlayPane ||
+                document.querySelector('#account-switcher')?.closest('.cdk-overlay-pane') ||
+                document.querySelector(ACCOUNT_NAME_SELECTOR)?.closest('.cdk-overlay-pane') ||
+                null;
+
+            const onClosed = () => {
+                restoreOverlayContainer(overlaySnapshot);
+                $.accountNameInFlight = false;
+            };
+
+            if (!overlayAlreadyOpen) {
+                closeAccountOverlay(trigger, pane, onClosed, true);
+            } else {
+                onClosed();
+            }
+        };
+
+        const applyName = (nameEl) => {
+            if (finished) return;
+            if (nameEl) {
+                const name = nameEl.textContent?.trim();
+                if (name) {
+                    label.textContent = name;
                 }
             }
-        ];
+            const pane =
+                nameEl?.closest?.('.cdk-overlay-pane') ||
+                document.querySelector('#account-switcher')?.closest('.cdk-overlay-pane') ||
+                null;
+            finalize(pane);
+        };
 
-        // Try each method INSTANTLY
-        for (const method of closeMethods) {
+        const observeOverlay = (overlayRoot) => {
+            if (finished) return;
+            if (!overlayRoot) {
+                finalize(null);
+                return;
+            }
+
+            const pane = overlayRoot.closest('.cdk-overlay-pane');
+            const findName = () => {
+                if (finished) return;
+                const candidate =
+                    overlayRoot.querySelector('.name') ||
+                    overlayRoot.querySelector('[class*="name"]') ||
+                    document.querySelector(ACCOUNT_NAME_SELECTOR);
+                if (candidate && candidate.textContent?.trim()) {
+                    applyName(candidate);
+                }
+            };
+
+            findName();
+            if (finished) return;
+
+            nameObserver = new MutationObserver(findName);
+            nameObserver.observe(overlayRoot, {
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+
+            if (pane) {
+                removalObserver = new MutationObserver(() => {
+                    if (!pane.isConnected) {
+                        finalize(pane);
+                    }
+                });
+                const target = pane.parentElement ?? document.body;
+                removalObserver.observe(target, { childList: true, subtree: true });
+            } else {
+                removalObserver = new MutationObserver(() => {
+                    if (!overlayRoot.isConnected) {
+                        finalize(null);
+                    }
+                });
+                removalObserver.observe(document.body, { childList: true, subtree: true });
+            }
+        };
+
+        if (!overlayAlreadyOpen) {
             try {
-                method();
-                break;
-            } catch (e) {
-                // Continue to next method if one fails
+                trigger.click();
+            } catch (error) {
+                restoreOverlayContainer(overlaySnapshot);
+                $.accountNameInFlight = false;
+                return;
             }
         }
+
+        if (existingOverlayRoot) {
+            observeOverlay(existingOverlayRoot);
+            return;
+        }
+
+        const immediateOverlay = document.querySelector('#account-switcher');
+        if (immediateOverlay) {
+            observeOverlay(immediateOverlay);
+            return;
+        }
+
+        wait(
+            '#account-switcher',
+            (overlayRoot) => observeOverlay(overlayRoot),
+            4000,
+            () => finalize(null)
+        );
+    };
+
+    const observeAccountSwitcher = () => {
+        const accountObs = new MutationObserver(() => {
+            raf(ensureAccountDisplayName);
+        });
+
+        accountObs.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'id', 'data-testid', 'aria-label'],
+            characterData: true
+        });
+        $.obs.add(accountObs);
+
+        ensureAccountDisplayName();
     };
 
     class SmartThemeEngine {
@@ -614,37 +1079,35 @@
 
     const init = () => {
         chrome.storage.local.get(['presets', 'activePresetIndex'], (r) => {
-            if (r.presets?.[r.activePresetIndex]) {
-                $.preset = r.presets[r.activePresetIndex];
+            const preset = r.presets?.[r.activePresetIndex] ?? null;
+            $.preset = preset;
+            if (preset) {
+                queueApply();
             }
         });
 
         chrome.storage.onChanged.addListener((changes) => {
             if (changes.activePresetIndex || changes.presets) {
                 chrome.storage.local.get(['presets', 'activePresetIndex'], (r) => {
-                    if (r.presets?.[r.activePresetIndex]) {
-                        $.preset = r.presets[r.activePresetIndex];
+                    const preset = r.presets?.[r.activePresetIndex] ?? null;
+                    $.preset = preset;
+                    if (preset) {
                         queueApply();
                     }
                 });
             }
         });
 
-         if (window.location.href.includes('/prompts/')) {
-            observeModel();
-            observeModal();
-            observeUrl();
-           setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
-        }
+        observeModel();
+        observeModal();
+        observeUrl();
+        setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
 
         // INSTANT execution - start immediately with zero delays
         observeAccountSwitcher();
-
-        // INSTANT multiple checks to catch the element as soon as it appears
-        replaceAccountEmailWithName();
-        // Use requestAnimationFrame for next tick - still instant but allows DOM to settle
-        requestAnimationFrame(replaceAccountEmailWithName);
-        requestAnimationFrame(() => requestAnimationFrame(replaceAccountEmailWithName));
+        ensureAccountDisplayName();
+        requestAnimationFrame(ensureAccountDisplayName);
+        requestAnimationFrame(() => requestAnimationFrame(ensureAccountDisplayName));
 
         const themeEngine = new SmartThemeEngine();
         if (document.readyState === 'loading') {
