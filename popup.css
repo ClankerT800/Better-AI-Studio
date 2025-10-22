@@ -20,7 +20,13 @@ html {
 }
 
 body {
-  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   width: 400px;
   margin: 0;
   padding: 0;
@@ -62,7 +68,9 @@ body {
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .header-icon-btn:hover {
@@ -166,7 +174,9 @@ input[type="range"]::-webkit-slider-thumb {
   height: 1.23rem;
   border-radius: 50%;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
@@ -181,7 +191,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
   width: 3.85rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .setting__slider-value:focus {
@@ -195,7 +207,9 @@ textarea {
   font-family: inherit;
   font-size: 0.92rem;
   line-height: 1.5;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   resize: vertical;
   min-height: 4.62rem;
   max-height: 10rem;
@@ -215,7 +229,10 @@ textarea:focus {
   border-radius: 0.75rem;
   padding: 0.75rem;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
   contain: layout style;
   position: relative;
 }
@@ -235,7 +252,6 @@ textarea:focus {
   font-size: 1rem;
 }
 
-
 button {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -245,7 +261,9 @@ button {
   font-size: 1rem;
   font-weight: 500;
   font-family: inherit;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
   contain: layout style;
   position: relative;
 }
@@ -289,7 +307,10 @@ body.no-presets #save-preset-btn {
   padding: 0.25rem;
   border-radius: 0.75rem;
   margin-bottom: 0.25rem;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
   contain: layout style paint;
   cursor: pointer;
   position: relative;
@@ -316,7 +337,10 @@ body.no-presets #save-preset-btn {
   cursor: pointer;
   padding: 0.46rem;
   opacity: 0.7;
-  transition: color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    opacity 0.2s ease;
   width: 1.69rem;
   height: 1.69rem;
   border-radius: 0.5rem;
@@ -349,7 +373,9 @@ body.no-presets #save-preset-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   opacity: 0.6;
   contain: layout style;
 }
@@ -376,7 +402,9 @@ body.no-presets #save-preset-btn {
   font-weight: 500;
   font-family: inherit;
   width: 100%;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   contain: layout style;
   position: relative;
 }
@@ -435,7 +463,9 @@ body.no-presets #save-preset-btn {
   padding: 0.75rem;
   font-size: 0.92rem;
   font-family: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .modal__content input:focus {
@@ -507,7 +537,9 @@ body.no-presets #save-preset-btn {
   padding: 0;
   border: none;
   cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   display: grid;
   place-items: center;
   font-size: 18px;
@@ -534,29 +566,144 @@ body.no-presets #save-preset-btn {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.modal-nav{display:flex;gap:2px}
-.nav-tab{padding:6px 12px;border:none;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit}
-.nav-tab.disabled{cursor:not-allowed;opacity:.5}
-.modal-close-btn svg{width:18px;height:18px}
-.themes-section{margin-bottom:24px}
-.themes-section:last-child{margin-bottom:0}
-.section-title{font-size:14px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.count{font-size:11px;font-weight:400}
-.preset-grid,.custom-themes-grid{display:grid!important;grid-template-columns:repeat(2,1fr)!important;gap:8px}
-.empty-msg{grid-column:1/-1;text-align:center;padding:24px;font-size:12px}
-.theme-card{border-radius:6px;padding:10px;cursor:pointer;transition:all .2s}
-.theme-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.theme-name{font-size:12px;font-weight:600;flex:1}
-.theme-actions{display:flex;gap:2px;opacity:1}
-.theme-actions button{width:20px;height:20px;padding:0;border:none;cursor:pointer;transition:all .2s;display:grid;place-items:center}
-.theme-actions button svg{width:12px;height:12px}
-.theme-preview{display:flex;gap:6px;margin-bottom:6px}
-.preview-swatches{display:flex;gap:3px;flex:1}
-.swatch{height:24px;flex:1;border-radius:3px}
-.theme-meta{display:flex;gap:3px;flex-wrap:wrap}
-.theme-tag{font-size:9px;padding:2px 4px;border-radius:2px;text-transform:uppercase;font-weight:500}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+.modal-nav {
+  display: flex;
+  gap: 2px;
+}
+.nav-tab {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.nav-tab.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.modal-close-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.themes-section {
+  margin-bottom: 24px;
+}
+.themes-section:last-child {
+  margin-bottom: 0;
+}
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.count {
+  font-size: 11px;
+  font-weight: 400;
+}
+.preset-grid,
+.custom-themes-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 8px;
+}
+.empty-msg {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 24px;
+  font-size: 12px;
+}
+.theme-card {
+  border-radius: 6px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  background: var(--bas-surface, transparent);
+  color: inherit;
+  width: 100%;
+  text-align: left;
+  display: block;
+}
+.theme-card:focus-visible {
+  outline: 2px solid var(--bas-primary, currentColor);
+  outline-offset: 2px;
+}
+.theme-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.theme-name {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1;
+}
+.theme-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 1;
+}
+.theme-actions button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: grid;
+  place-items: center;
+}
+.theme-actions button svg {
+  width: 12px;
+  height: 12px;
+}
+.theme-preview {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.preview-swatches {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+.swatch {
+  height: 24px;
+  flex: 1;
+  border-radius: 3px;
+}
+.theme-meta {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.theme-tag {
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

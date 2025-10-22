@@ -1,0 +1,40 @@
+{
+  "links": {
+    "social": [
+      {
+        "id": "x",
+        "label": "Follow on X",
+        "href": "https://x.com/ClankerT800"
+      }
+    ],
+    "support": [
+      {
+        "id": "buy-me-a-coffee",
+        "label": "Buy Me a Coffee",
+        "href": "https://buymeacoffee.com/clankert800",
+        "image": "https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png",
+        "alt": "Buy Me a Coffee"
+      }
+    ]
+  },
+  "presets": {
+    "defaults": {
+      "temperature": 1,
+      "topP": 0.95,
+      "systemInstructions": "",
+      "tools": {
+        "codeExecution": false,
+        "search": true,
+        "urlContext": false
+      }
+    }
+  },
+  "themes": {
+    "default": "monochrome",
+    "favorites": ["midnight", "monochrome", "matrix"]
+  },
+  "timing": {
+    "presetApplyMaxAttempts": 12,
+    "elementDiscoveryTimeoutMs": 2500
+  }
+}

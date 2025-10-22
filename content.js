@@ -1,5 +1,4 @@
-﻿(() => {
-    if (window.geminiWorkerRunning) return;
+﻿(() => {     if (window.geminiWorkerRunning) return;
     window.geminiWorkerRunning = true;
 
     const SELECTORS = {
@@ -244,7 +243,7 @@
                     observeModel();
                     observeModal();
                     observeAccountSwitcher();
-                    queueApply();
+                     queueApply();
                 }, 200);
             }
         });
@@ -298,7 +297,7 @@
                 observeModel();
                 observeModal();
                 observeAccountSwitcher();
-                queueApply();
+               queueApply();
             }, 200);
         };
 
@@ -372,6 +371,33 @@
         }
     };
 
+    const recordOverlayState = (container) => ({
+        container,
+        style: container.getAttribute('style') ?? ''
+    });
+
+    const maskOverlayContainer = () => {
+        const container = document.querySelector('.cdk-overlay-container');
+        if (!container) return null;
+        const snapshot = recordOverlayState(container);
+        container.style.visibility = 'hidden';
+        container.style.opacity = '0';
+        container.style.pointerEvents = 'none';
+        container.style.transform = 'translate3d(-9999px, -9999px, 0)';
+        container.style.transition = 'none';
+        return snapshot;
+    };
+
+    const restoreOverlayContainer = (snapshot) => {
+        if (!snapshot) return;
+        const { container, style } = snapshot;
+        requestAnimationFrame(() => {
+            if (!container) return;
+            if (style) container.setAttribute('style', style);
+            else container.removeAttribute('style');
+        });
+    };
+
     const triggerAccountDropdown = () => {
         // INSTANT DOM query - no caching
         const accountSwitcher = document.querySelector(SELECTORS.accountSwitcher);
@@ -419,24 +445,26 @@
         // If no name found, try clicking triggers to reveal it - INSTANT
         for (const trigger of triggers) {
             if (trigger && trigger !== accountSwitcher) {
-                // Store original state
-                const wasExpanded = trigger.getAttribute('aria-expanded') === 'true';
-
-                // INSTANT click to open dropdown
+                const overlaySnapshot = maskOverlayContainer();
                 trigger.click();
 
-                // INSTANT check for name after click - no delays
-                nameElement = findNameInDropdown();
-                if (nameElement && nameElement.textContent.trim()) {
-                    accountSwitcher.textContent = nameElement.textContent.trim();
-
-                    // INSTANT close the dropdown - no delays
-                    if (!wasExpanded) {
+                const attemptNameExtraction = (attempt = 0) => {
+                    const nameElement = findNameInDropdown();
+                    if (nameElement && nameElement.textContent.trim()) {
+                        accountSwitcher.textContent = nameElement.textContent.trim();
                         closeAccountDropdown(trigger);
+                        restoreOverlayContainer(overlaySnapshot);
+                        return;
                     }
-                    return;
-                }
+                    if (attempt >= 2) {
+                        closeAccountDropdown(trigger);
+                        restoreOverlayContainer(overlaySnapshot);
+                        return;
+                    }
+                    requestAnimationFrame(() => attemptNameExtraction(attempt + 1));
+                };
 
+                requestAnimationFrame(() => attemptNameExtraction(0));
                 break;
             }
         }
@@ -602,11 +630,11 @@
             }
         });
 
-        if (window.location.href.includes('/prompts/')) {
+         if (window.location.href.includes('/prompts/')) {
             observeModel();
             observeModal();
             observeUrl();
-            setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
+           setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
         }
 
         // INSTANT execution - start immediately with zero delays
