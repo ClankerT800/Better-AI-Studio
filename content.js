@@ -183,14 +183,14 @@
             if (!toggle || isExpanded(header)) return false;
             let toggled = false;
             const attempt = (tries = 0) => {
-                if (isExpanded(header) || tries > 2) return;
+                if (isExpanded(header) || tries > 4) return;
                 toggle.click();
                 toggled = true;
-                setTimeout(() => {
+                requestAnimationFrame(() => {
                     if (!isExpanded(header)) {
                         attempt(tries + 1);
                     }
-                }, 140);
+                });
             };
             attempt(0);
             return toggled;
@@ -201,14 +201,14 @@
             if (!toggle || !isExpanded(header)) return false;
             let toggled = false;
             const attempt = (tries = 0) => {
-                if (!isExpanded(header) || tries > 2) return;
+                if (!isExpanded(header) || tries > 4) return;
                 toggle.click();
                 toggled = true;
-                setTimeout(() => {
+                requestAnimationFrame(() => {
                     if (isExpanded(header)) {
                         attempt(tries + 1);
                     }
-                }, 140);
+                });
             };
             attempt(0);
             return toggled;
@@ -220,46 +220,42 @@
     const prepareSectionsForPreset = (preset) => {
         const headers = Array.from(document.querySelectorAll('.settings-group-header'));
         const matchHeader = (label) =>
-            headers.find((h) => h.querySelector('.group-title')?.textContent?.toLowerCase().includes(label));
+            headers.find((h) =>
+                h.querySelector('.group-title')?.textContent?.toLowerCase().includes(label)
+            );
         const toolsHeader = matchHeader('tools');
         const advancedHeader = matchHeader('advanced');
 
-        const headersToCollapse = new Set();
-        const markForCollapse = (header) => {
-            if (header) {
-                headersToCollapse.add(header);
-            }
-        };
-        const ensureOpen = (header) => {
-            if (!header) return;
-            if (!sectionController.isExpanded(header)) {
-                sectionController.expand(header);
-            }
-            markForCollapse(header);
-        };
-        const ensureClosedAfter = (header) => {
-            if (!header) return;
-            markForCollapse(header);
+        const sectionsOpened = new Set();
+
+        const ensureExpanded = (header) => {
+            if (!header || sectionController.isExpanded(header)) return;
+            sectionController.expand(header);
+            sectionsOpened.add(header);
         };
 
         const expectsTopP = typeof preset?.topP === 'number' && !Number.isNaN(preset.topP);
-        const topPSlider = findSliderByType('topP');
-        const topPContainerExists = Boolean(document.querySelector('div[data-test-id="topPSliderContainer"]'));
-
-        const needsAdvancedOpen = (expectsTopP || topPContainerExists) && !topPSlider;
-        if (needsAdvancedOpen) {
-            ensureOpen(advancedHeader);
-        } else {
-            ensureClosedAfter(advancedHeader);
+        const topPContainerExists = Boolean(
+            document.querySelector('div[data-test-id="topPSliderContainer"]')
+        );
+        if (
+            advancedHeader &&
+            !sectionController.isExpanded(advancedHeader) &&
+            (expectsTopP || topPContainerExists)
+        ) {
+            ensureExpanded(advancedHeader);
         }
 
-        if (!sectionController.isExpanded(toolsHeader)) {
-            ensureOpen(toolsHeader);
-        } else {
-            ensureClosedAfter(toolsHeader);
+        const toolsConfig = preset?.tools ?? {};
+        const wantsToolChanges =
+            Object.prototype.hasOwnProperty.call(toolsConfig, 'codeExecution') ||
+            Object.prototype.hasOwnProperty.call(toolsConfig, 'search') ||
+            Object.prototype.hasOwnProperty.call(toolsConfig, 'urlContext');
+        if (toolsHeader && wantsToolChanges && !sectionController.isExpanded(toolsHeader)) {
+            ensureExpanded(toolsHeader);
         }
 
-        return Array.from(headersToCollapse).filter(Boolean);
+        return Array.from(sectionsOpened);
     };
 
     const apply = (p) => {
@@ -447,13 +443,15 @@
                 }
 
                 if (sectionsToRestore.length > 0) {
-                    setTimeout(() => {
-                        sectionsToRestore.forEach((header) => {
-                            if (sectionController.isExpanded(header)) {
-                                sectionController.collapse(header);
-                            }
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            sectionsToRestore.forEach((header) => {
+                                if (sectionController.isExpanded(header)) {
+                                    sectionController.collapse(header);
+                                }
+                            });
                         });
-                    }, 140);
+                    });
                 }
 
                 taskDone();
