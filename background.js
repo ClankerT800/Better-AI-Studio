@@ -124,9 +124,14 @@ chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
 
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace !== "sync" || !changes.settings) return;
-  const oldTheme = changes.settings.oldValue?.currentTheme;
-  const newTheme = changes.settings.newValue?.currentTheme;
-  if (oldTheme && newTheme && oldTheme === newTheme) return;
+  const oldSettings = changes.settings.oldValue ?? {};
+  const newSettings = changes.settings.newValue ?? {};
+  const themeChanged = oldSettings.currentTheme !== newSettings.currentTheme;
+  const oldOverrides = oldSettings.themeOverrides ?? {};
+  const newOverrides = newSettings.themeOverrides ?? {};
+  const overridesChanged =
+    JSON.stringify(oldOverrides) !== JSON.stringify(newOverrides);
+  if (!themeChanged && !overridesChanged) return;
   notifyThemeChange();
 });
 

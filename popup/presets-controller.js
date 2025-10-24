@@ -24,10 +24,22 @@ const deepEqual = (a, b) => {
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-const updateSliderTrack = (slider) => {
-  const progress =
-    ((slider.value - slider.min) / (slider.max - slider.min)) * 100;
-  slider.style.setProperty("--slider-progress", `${progress}%`);
+const updateSliderTrack = (slider, value) => {
+  if (!(slider instanceof HTMLInputElement)) return;
+  const min = Number.parseFloat(slider.min || "0");
+  const max = Number.parseFloat(slider.max || "100");
+  const currentValue = value !== undefined ? value : Number.parseFloat(slider.value || String(min));
+  const clamped = Number.isFinite(currentValue)
+    ? Math.min(Math.max(currentValue, min), max)
+    : min;
+  const range = max - min;
+  const percent = range <= 0 ? 0 : ((clamped - min) / range) * 100;
+
+  // Only update if the value actually changed to prevent infinite loops
+  if (slider.value !== String(clamped)) {
+    slider.value = String(clamped);
+  }
+  slider.style.setProperty("--slider-progress", `${percent}%`);
 };
 
 export class PresetsController {
@@ -238,14 +250,14 @@ export class PresetsController {
 
     if (temperatureSlider) {
       temperatureSlider.value = settings.temperature;
-      updateSliderTrack(temperatureSlider);
+      updateSliderTrack(temperatureSlider, settings.temperature);
     }
     if (temperatureInput) {
       temperatureInput.value = settings.temperature.toFixed(2);
     }
     if (topPSlider) {
       topPSlider.value = settings.topP;
-      updateSliderTrack(topPSlider);
+      updateSliderTrack(topPSlider, settings.topP);
     }
     if (topPInput) {
       topPInput.value = settings.topP.toFixed(2);
@@ -289,7 +301,7 @@ export class PresetsController {
     if (input) {
       input.value = value.toFixed(2);
     }
-    updateSliderTrack(slider);
+    updateSliderTrack(slider, value);
   }
 
   syncInputToSlider(input, slider) {
@@ -302,7 +314,7 @@ export class PresetsController {
     );
     slider.value = clamped;
     input.value = clamped.toFixed(2);
-    updateSliderTrack(slider);
+    updateSliderTrack(slider, clamped);
   }
 
   updateButtonState() {

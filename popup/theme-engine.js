@@ -7,15 +7,18 @@ export class PopupThemeEngine {
   constructor(rootDocument = document) {
     this.document = rootDocument;
     this.unsubscribe = null;
+    this.currentThemeId = null;
+    this.currentOverrides = null;
   }
 
   async init() {
     await this.applyCurrentTheme();
     this.unsubscribe = observeStorage("sync", (changes) => {
       if (!changes.settings) return;
-      const newTheme = changes.settings.newValue?.currentTheme;
-      if (!newTheme) return;
-      this.applyTheme(newTheme);
+      const newSettings = changes.settings.newValue ?? null;
+      const themeId = newSettings?.currentTheme;
+      const overrides = newSettings?.themeOverrides ?? null;
+      this.applyTheme(themeId, overrides);
     });
   }
 
@@ -28,18 +31,36 @@ export class PopupThemeEngine {
 
   async applyCurrentTheme() {
     const settings = await storageSync.get("settings", null);
-    await this.applyTheme(settings?.currentTheme);
+    await this.applyTheme(settings?.currentTheme, settings?.themeOverrides ?? null);
   }
 
-  async applyTheme(themeId) {
+  async applyTheme(themeId, overrides) {
     try {
+      // Don't reapply if values are already current (prevents double application)
+      if (themeId === this.currentThemeId && this.overridesEqual(overrides, this.currentOverrides)) {
+        return;
+      }
+
       const css = await getPopupCss(themeId);
       if (!css) return;
       const styleElement = this.ensureStyleElement();
-      styleElement.textContent = css;
+      const overrideCss = this.buildOverrideCss(overrides);
+      styleElement.textContent = [css, overrideCss].filter(Boolean).join("\n\n");
+      this.currentThemeId = themeId ?? null;
+      this.currentOverrides = overrides ?? null;
     } catch (error) {
       console.error("Failed to apply popup theme", error);
     }
+  }
+
+  overridesEqual(a, b) {
+    if (a === b) return true;
+    if (!a && !b) return true; // Both null/undefined
+    if (!a || !b) return false; // One is null/undefined, other isn't
+
+    // Compare the actual override values
+    return (a.radius || null) === (b.radius || null) &&
+           (a.borderWidth || null) === (b.borderWidth || null);
   }
 
   ensureStyleElement() {
@@ -50,5 +71,20 @@ export class PopupThemeEngine {
       this.document.head.appendChild(styleElement);
     }
     return styleElement;
+  }
+
+  buildOverrideCss(overrides) {
+    if (!overrides) return "";
+    const declarations = [];
+    if (overrides.radius) {
+      declarations.push(`  --bas-radius: ${overrides.radius};`);
+    }
+    if (overrides.borderWidth) {
+      declarations.push(`  --bas-border-width: ${overrides.borderWidth};`);
+    }
+    if (declarations.length === 0) {
+      return "";
+    }
+    return `:root {\n${declarations.join("\n")}\n}`;
   }
 }

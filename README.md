@@ -6,7 +6,7 @@ Better AI studio is a *must-have* extension for people who use Google's AI studi
 
 The main goal of this extension is to make AI studio better.
 
-Instead of manually adjusting the settings, and rewriting the system instructions for *EVERY SINGLE CHAT* - you can just set up a preset inside Better AIstudio, and all that will be done &*AUTOMATICALLY*, without you even having to press a single button! 
+Instead of manually adjusting the settings, and rewriting the system instructions for *EVERY SINGLE CHAT* - you can just set up a preset inside Better AIstudio, and all that will be done *AUTOMATICALLY*, without you even having to press a single button! 
 
 Just set it up and forget about it! 
 
