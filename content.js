@@ -1006,17 +1006,12 @@
                 lastUrl = location.href;
                 lastTitle = document.title;
                 
-                // Close any open account overlay immediately on navigation
+                // Force close any leftover account overlay
                 const overlayRoot = document.querySelector('#account-switcher');
                 if (overlayRoot) {
                     const pane = overlayRoot.closest('.cdk-overlay-pane');
                     if (pane) {
-                        const boundingBox = pane.parentElement;
-                        if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
-                            boundingBox.remove();
-                        } else {
-                            pane.remove();
-                        }
+                        removeOverlayNodes(pane);
                     }
                 }
                 
@@ -1024,7 +1019,7 @@
                     observeModel();
                     observeModal();
                     observeAccountSwitcher();
-                     queueApply();
+                      queueApply();
                 }, 200);
             }
         });
@@ -1035,17 +1030,12 @@
 
         const setupNavigation = () => {
             const handleNavigation = () => {
-                // Close overlay on navigation
+                // Force close any leftover account overlay
                 const overlayRoot = document.querySelector('#account-switcher');
                 if (overlayRoot) {
                     const pane = overlayRoot.closest('.cdk-overlay-pane');
                     if (pane) {
-                        const boundingBox = pane.parentElement;
-                        if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
-                            boundingBox.remove();
-                        } else {
-                            pane.remove();
-                        }
+                        removeOverlayNodes(pane);
                     }
                 }
                 
@@ -1088,17 +1078,12 @@
         const origGo = history.go;
 
         const handleNavigation = () => {
-            // Close overlay on navigation
+            // Force close any leftover account overlay
             const overlayRoot = document.querySelector('#account-switcher');
             if (overlayRoot) {
                 const pane = overlayRoot.closest('.cdk-overlay-pane');
                 if (pane) {
-                    const boundingBox = pane.parentElement;
-                    if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
-                        boundingBox.remove();
-                    } else {
-                        pane.remove();
-                    }
+                    removeOverlayNodes(pane);
                 }
             }
             
@@ -1386,8 +1371,8 @@
             wait(SELECTORS.accountSwitcher, () => {
                 raf(() => autoFetchAccountName());
             }, 2500);
-                return;
-            }
+            return;
+        }
 
         const labelText = label.textContent?.trim() ?? '';
         if (!labelText.includes('@')) return; // Already has name
@@ -1413,52 +1398,6 @@
             container.style.zIndex = '-9999';
         }
 
-        const cleanup = () => {
-            // Always restore container and close overlay
-            if (container) {
-                if (originalStyle) {
-                    container.setAttribute('style', originalStyle);
-            } else {
-                    container.removeAttribute('style');
-                }
-            }
-            
-            // Force close the overlay if it's still open - use multiple methods
-            const overlayRoot = document.querySelector('#account-switcher');
-            if (overlayRoot && overlayRoot.isConnected) {
-                const pane = overlayRoot.closest('.cdk-overlay-pane');
-                
-                // Method 1: Click trigger
-                try {
-                    trigger?.click();
-                } catch (e) {
-                    // Ignore
-                }
-                
-                // Method 2: Press Escape
-                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-                
-                // Method 3: If still there after a moment, force remove
-                setTimeout(() => {
-                    const stillThere = document.querySelector('#account-switcher');
-                    if (stillThere && stillThere.isConnected) {
-                        const stillPane = stillThere.closest('.cdk-overlay-pane');
-                        if (stillPane) {
-                            // Force remove the entire overlay pane
-                            const boundingBox = stillPane.parentElement;
-                            if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
-                                boundingBox.remove();
-                            } else {
-                                stillPane.remove();
-                            }
-                        }
-                    }
-                }, 100);
-            }
-            
-            $.accountNameInFlight = false;
-        };
-
         // Click to open
         trigger.click();
 
@@ -1476,13 +1415,63 @@
                 }
             }
 
-            // Close immediately - like preset system
+            // Close immediately - try multiple methods to ensure it closes
             raf(() => {
-                cleanup();
+                // Method 1: Click trigger to toggle
+                trigger.click();
+                
+                // Method 2: Press Escape key
+                setTimeout(() => {
+                    document.dispatchEvent(new KeyboardEvent('keydown', { 
+                        key: 'Escape', 
+                        code: 'Escape',
+                        keyCode: 27,
+                        bubbles: true,
+                        cancelable: true
+                    }));
+                }, 50);
+                
+                // Method 3: Force remove if still present
+                setTimeout(() => {
+                    const stillOpen = document.querySelector('#account-switcher');
+                    if (stillOpen) {
+                        const pane = stillOpen.closest('.cdk-overlay-pane');
+                        if (pane) {
+                            removeOverlayNodes(pane);
+                        }
+                    }
+                }, 150);
+                
+                // Restore container after all close attempts
+                setTimeout(() => {
+                    if (container) {
+                        if (originalStyle) {
+                            container.setAttribute('style', originalStyle);
+                        } else {
+                            container.removeAttribute('style');
+                        }
+                    }
+                    $.accountNameInFlight = false;
+                }, 200);
             });
         }, 2500, () => {
-            // Timeout: cleanup
-            cleanup();
+            // Timeout: force close overlay and restore
+            const stillOpen = document.querySelector('#account-switcher');
+            if (stillOpen) {
+                const pane = stillOpen.closest('.cdk-overlay-pane');
+                if (pane) {
+                    removeOverlayNodes(pane);
+                }
+            }
+            
+            if (container) {
+                if (originalStyle) {
+                    container.setAttribute('style', originalStyle);
+                } else {
+                    container.removeAttribute('style');
+                }
+            }
+            $.accountNameInFlight = false;
         });
     };
 
@@ -1791,33 +1780,13 @@
         });
     };
 
-    const forceCloseAccountOverlay = () => {
-        // Emergency cleanup: force close any open account overlay
-        const overlayRoot = document.querySelector('#account-switcher');
-        if (overlayRoot && overlayRoot.isConnected) {
-            const pane = overlayRoot.closest('.cdk-overlay-pane');
-            if (pane) {
-                const boundingBox = pane.parentElement;
-                if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
-                    boundingBox.remove();
-                } else {
-                    pane.remove();
-                }
-            }
-        }
-    };
-
     window.addEventListener('beforeunload', () => {
-        forceCloseAccountOverlay();
         $.rafs.forEach(cancelAnimationFrame);
         $.rafs.clear();
         $.obs.forEach(o => o.disconnect());
         $.obs.clear();
         $.cache.clear();
     }, { once: true, passive: true });
-    
-    // Also cleanup on any navigation
-    window.addEventListener('pagehide', forceCloseAccountOverlay, { passive: true });
 
     init();
 })()
