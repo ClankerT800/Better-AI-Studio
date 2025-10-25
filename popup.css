@@ -551,7 +551,7 @@ body.no-presets #save-preset-btn {
   backdrop-filter: blur(12px);
   border-bottom: var(--bas-border-width, 1px) solid
     var(--bas-border-subtle, rgba(255, 255, 255, 0.08));
-  z-index: 3;
+  z-index: 101;
   box-shadow:
     0 1px 0 color-mix(in srgb, var(--bas-border, rgba(255, 255, 255, 0.12)) 80%, transparent),
     0 6px 18px color-mix(in srgb, var(--bas-bg, #000) 12%, transparent);
@@ -660,19 +660,72 @@ body.no-presets #save-preset-btn {
 }
 .theme-card {
   border-radius: 6px;
-  padding: 10px;
-  cursor: pointer;
   transition: all 0.2s;
-  border: none;
+  border: 1px solid var(--bas-border-subtle, rgba(255, 255, 255, 0.08));
   background: var(--bas-surface, transparent);
   color: inherit;
   width: 100%;
   text-align: left;
   display: block;
+  position: relative;
+  overflow: hidden;
 }
-.theme-card:focus-visible {
+.theme-card-content {
+  border-radius: 6px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  text-align: left;
+  display: block;
+}
+.theme-card-content:focus-visible {
   outline: 2px solid var(--bas-primary, currentColor);
   outline-offset: 2px;
+}
+.theme-pin-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--bas-text-secondary, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  opacity: 0.5;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
+  z-index: 10;
+}
+.theme-pin-btn:hover {
+  color: var(--bas-text, rgba(255, 255, 255, 0.6));
+  opacity: 0.7;
+}
+.theme-pin-btn:active {
+  transform: scale(0.9);
+}
+.theme-pin-btn .pin-icon {
+  transition: transform 0.2s ease;
+}
+.theme-pin-btn .pin-icon.pinned {
+  color: var(--bas-primary, #4A9FF5);
+  transform: rotate(45deg);
+}
+.theme-pin-btn:hover .pin-icon.pinned {
+  color: var(--bas-primary, #4A9FF5);
+}
+.theme-card .theme-pin-btn:has(.pin-icon.pinned) {
+  opacity: 1;
+}
+.theme-card .theme-pin-btn:has(.pin-icon.pinned):hover {
+  opacity: 1;
 }
 .theme-card-header {
   display: flex;
@@ -723,6 +776,7 @@ body.no-presets #save-preset-btn {
   display: flex;
   gap: 3px;
   flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 .theme-tag {
   font-size: 9px;
@@ -730,6 +784,17 @@ body.no-presets #save-preset-btn {
   border-radius: 2px;
   text-transform: uppercase;
   font-weight: 500;
+  background: color-mix(in srgb, var(--bas-text, #ffffff) 12%, transparent);
+  color: var(--bas-text-secondary, rgba(255, 255, 255, 0.7));
+}
+.theme-tag--beta {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  font-weight: 600;
+  padding: 2px 6px;
+  margin-left: 6px;
+  box-shadow: 0 1px 3px rgba(102, 126, 234, 0.3);
+  letter-spacing: 0.5px;
 }
 .theme-customizer {
   position: sticky;
@@ -745,7 +810,7 @@ body.no-presets #save-preset-btn {
   border-top: var(--bas-border-width, 1px) solid
     var(--bas-border-subtle, rgba(255, 255, 255, 0.06));
   box-shadow: 0 -10px 26px color-mix(in srgb, var(--bas-bg, #000000) 18%, transparent);
-  z-index: 4;
+  z-index: 100;
   backdrop-filter: blur(12px);
 }
 .theme-customizer__header {
@@ -785,6 +850,9 @@ body.no-presets #save-preset-btn {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+.theme-customizer__field:last-child {
+  grid-column: 1 / -1;
 }
 .theme-customizer__field {
   display: flex;

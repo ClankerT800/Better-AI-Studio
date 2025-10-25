@@ -41,6 +41,7 @@ const tokenizeTheme = (theme) => {
     text: base.text ?? FALLBACK_THEME.base.text,
     radius: theme?.radius ?? FALLBACK_THEME.radius,
     borderWidth: theme?.borderWidth ?? FALLBACK_THEME.borderWidth,
+    outlineOpacity: theme?.outlineOpacity ?? "1",
   };
 };
 

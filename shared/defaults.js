@@ -30,6 +30,7 @@ export const getSyncDefaults = async () => {
     preferences: {
       favoriteThemes: favorites,
       recentThemes: [],
+      pinnedThemes: ["monochrome", "matrix", "midnight"],
     },
     presetSnapshot: presetDefaults,
     version: manifestMeta.version,

@@ -60,7 +60,8 @@ export class PopupThemeEngine {
 
     // Compare the actual override values
     return (a.radius || null) === (b.radius || null) &&
-           (a.borderWidth || null) === (b.borderWidth || null);
+           (a.borderWidth || null) === (b.borderWidth || null) &&
+           (a.outlineOpacity || null) === (b.outlineOpacity || null);
   }
 
   ensureStyleElement() {
@@ -81,6 +82,9 @@ export class PopupThemeEngine {
     }
     if (overrides.borderWidth) {
       declarations.push(`  --bas-border-width: ${overrides.borderWidth};`);
+    }
+    if (overrides.outlineOpacity !== undefined && overrides.outlineOpacity !== null) {
+      declarations.push(`  --bas-outline-opacity: ${overrides.outlineOpacity};`);
     }
     if (declarations.length === 0) {
       return "";

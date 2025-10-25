@@ -47,7 +47,9 @@
             obs: new Set(),
             applying: false,
             preset: null,
-            accountNameInFlight: false
+            accountNameInFlight: false,
+            userClickingAccount: false,
+            accountNameFetched: false
         };
     }
 
@@ -92,7 +94,7 @@
   border-radius: 999px;
   border: none !important;
   background: var(--bas-primary, #1a73e8) !important;
-  color: var(--bas-bg, #ffffff) !important;
+  color: var(--bas-bg) !important;
   transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 .bas-run-button:hover:not(:disabled) {
@@ -212,9 +214,7 @@
     };
 
     const setRunButtonIconColor = (button) => {
-        const background = getComputedStyle(button).backgroundColor;
-        const rgb = parseRgbString(background);
-        const color = chooseIconColor(rgb);
+        const color = 'var(--bas-bg)';
         button.style.setProperty('color', color, 'important');
         button.dataset.basRunIconColor = color;
 
@@ -635,6 +635,25 @@
         return Array.from(sectionsOpened);
     };
 
+    const resetToDefaults = () => {
+        // Reset website to default values (from ui-config.json)
+        const defaults = {
+            temperature: 1,
+            topP: 0.95,
+            systemInstructions: '',
+            tools: {
+                codeExecution: false,
+                search: true,
+                urlContext: false
+            }
+        };
+        
+        // Apply the default preset
+        if (!$.applying) {
+            raf(() => apply(defaults));
+        }
+    };
+
     const apply = (p) => {
         if (!p || $.applying) return;
         $.applying = true;
@@ -986,6 +1005,21 @@
             if (location.href !== lastUrl || document.title !== lastTitle) {
                 lastUrl = location.href;
                 lastTitle = document.title;
+                
+                // Close any open account overlay immediately on navigation
+                const overlayRoot = document.querySelector('#account-switcher');
+                if (overlayRoot) {
+                    const pane = overlayRoot.closest('.cdk-overlay-pane');
+                    if (pane) {
+                        const boundingBox = pane.parentElement;
+                        if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
+                            boundingBox.remove();
+                        } else {
+                            pane.remove();
+                        }
+                    }
+                }
+                
                 setTimeout(() => {
                     observeModel();
                     observeModal();
@@ -1001,6 +1035,20 @@
 
         const setupNavigation = () => {
             const handleNavigation = () => {
+                // Close overlay on navigation
+                const overlayRoot = document.querySelector('#account-switcher');
+                if (overlayRoot) {
+                    const pane = overlayRoot.closest('.cdk-overlay-pane');
+                    if (pane) {
+                        const boundingBox = pane.parentElement;
+                        if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
+                            boundingBox.remove();
+                        } else {
+                            pane.remove();
+                        }
+                    }
+                }
+                
                 setTimeout(() => {
                     observeModel();
                     observeModal();
@@ -1040,6 +1088,20 @@
         const origGo = history.go;
 
         const handleNavigation = () => {
+            // Close overlay on navigation
+            const overlayRoot = document.querySelector('#account-switcher');
+            if (overlayRoot) {
+                const pane = overlayRoot.closest('.cdk-overlay-pane');
+                if (pane) {
+                    const boundingBox = pane.parentElement;
+                    if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
+                        boundingBox.remove();
+                    } else {
+                        pane.remove();
+                    }
+                }
+            }
+            
             setTimeout(() => {
                 observeModel();
                 observeModal();
@@ -1086,11 +1148,11 @@
         const container = document.querySelector('.cdk-overlay-container');
         if (!container) return null;
         const snapshot = recordOverlayState(container);
-        container.style.visibility = 'hidden';
+        // Hide visually but DON'T block pointer events - this was blocking user clicks!
         container.style.opacity = '0';
-        container.style.pointerEvents = 'none';
         container.style.transform = 'translate3d(-9999px, -9999px, 0)';
         container.style.transition = 'none';
+        // DO NOT set pointerEvents to 'none' - that blocks user clicks on the account button!
         return snapshot;
     };
 
@@ -1099,8 +1161,13 @@
         const { container, style } = snapshot;
         requestAnimationFrame(() => {
             if (!container) return;
-            if (style) container.setAttribute('style', style);
-            else container.removeAttribute('style');
+            if (style) {
+                container.setAttribute('style', style);
+            } else {
+                container.removeAttribute('style');
+            }
+            // Extra safety: ensure pointer events are never blocked
+            container.style.pointerEvents = '';
         });
     };
 
@@ -1131,6 +1198,10 @@
             if (completed) return;
             completed = true;
             observer?.disconnect();
+            // Ensure overlay container is clickable after closing
+            if (container && container.style.pointerEvents === 'none') {
+                container.style.pointerEvents = '';
+            }
             done?.();
         };
 
@@ -1160,7 +1231,12 @@
             const actions =
                 attempt === 0
                     ? [
-                          () => trigger.click(),
+                          () => {
+                              // Don't click trigger if user is actively clicking
+                              if (!$.userClickingAccount) {
+                                  trigger?.click();
+                              }
+                          },
                           () =>
                               document.dispatchEvent(
                                   new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
@@ -1210,9 +1286,111 @@
         if (!label) return;
 
         const labelText = label.textContent?.trim() ?? '';
+        
+        // If it's already showing a name (not email), we're done
         if (!labelText.includes('@')) return;
 
-        if ($.accountNameInFlight) return;
+        // Check if overlay is already open (user opened it)
+        const existingOverlayRoot = document.querySelector('#account-switcher');
+        if (existingOverlayRoot) {
+            // Overlay is open, just read the name passively
+            const nameEl = existingOverlayRoot.querySelector('.name') ||
+                           existingOverlayRoot.querySelector('[class*="name"]') ||
+                           document.querySelector(ACCOUNT_NAME_SELECTOR);
+            if (nameEl && nameEl.textContent?.trim()) {
+                const name = nameEl.textContent.trim();
+                if (name) {
+                    label.textContent = name;
+                    $.accountNameFetched = true;
+                }
+            }
+        }
+    };
+
+    const setupAccountButtonListeners = () => {
+        const label = document.querySelector(SELECTORS.accountSwitcher);
+        if (!label) return;
+
+        const trigger =
+            label.closest('button') ||
+            label.closest('[role="button"]') ||
+            document.querySelector(SELECTORS.dropdownTrigger);
+
+        if (!trigger || trigger.dataset.basAccountListener) return;
+        
+        // Mark as having listener to avoid duplicates
+        trigger.dataset.basAccountListener = '1';
+
+        // When user clicks, wait for overlay to open and capture the name
+        const handleClick = () => {
+            // Wait for overlay to appear
+            setTimeout(() => {
+                const overlayRoot = document.querySelector('#account-switcher');
+                if (overlayRoot) {
+                    const nameEl = overlayRoot.querySelector('.name') ||
+                                   overlayRoot.querySelector('[class*="name"]') ||
+                                   document.querySelector(ACCOUNT_NAME_SELECTOR);
+                    if (nameEl && nameEl.textContent?.trim()) {
+                        const name = nameEl.textContent.trim();
+                        if (name && label) {
+                            label.textContent = name;
+                            $.accountNameFetched = true;
+                        }
+                    }
+                }
+            }, 300);
+        };
+
+        // Listen for click to capture name when overlay opens
+        trigger.addEventListener('click', handleClick);
+    };
+
+    const ensureOverlayContainerClickable = () => {
+        // Safety mechanism: ensure overlay container never blocks clicks
+        const container = document.querySelector('.cdk-overlay-container');
+        if (container) {
+            // Remove any pointer-events blocking
+            if (container.style.pointerEvents === 'none') {
+                container.style.pointerEvents = '';
+            }
+        }
+    };
+
+    const observeAccountSwitcher = () => {
+        const accountObs = new MutationObserver(() => {
+            // Always keep button listeners updated
+            setupAccountButtonListeners();
+            
+            // If overlay opens naturally (user clicked), try to grab the name
+            raf(ensureAccountDisplayName);
+        });
+
+        accountObs.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        $.obs.add(accountObs);
+
+        // Initial setup
+        setupAccountButtonListeners();
+        ensureAccountDisplayName();
+        
+        // Automatically fetch name IMMEDIATELY - no delay
+        raf(() => autoFetchAccountName());
+    };
+
+    const autoFetchAccountName = () => {
+        const label = document.querySelector(SELECTORS.accountSwitcher);
+        if (!label) {
+            // Retry if not found yet
+            wait(SELECTORS.accountSwitcher, () => {
+                raf(() => autoFetchAccountName());
+            }, 2500);
+                return;
+            }
+
+        const labelText = label.textContent?.trim() ?? '';
+        if (!labelText.includes('@')) return; // Already has name
 
         const trigger =
             label.closest('button') ||
@@ -1220,151 +1398,92 @@
             document.querySelector(SELECTORS.dropdownTrigger);
 
         if (!trigger) return;
+        if ($.accountNameInFlight) return;
 
         $.accountNameInFlight = true;
-        let finished = false;
-        let nameObserver = null;
-        let removalObserver = null;
 
-        const existingOverlayRoot = document.querySelector('#account-switcher');
-        const overlayAlreadyOpen = Boolean(existingOverlayRoot);
-        const overlaySnapshot = overlayAlreadyOpen ? null : maskOverlayContainer();
+        // Hide overlay container BEFORE clicking - instant and seamless
+        const container = document.querySelector('.cdk-overlay-container');
+        let originalStyle = '';
+        if (container) {
+            originalStyle = container.getAttribute('style') || '';
+            container.style.opacity = '0';
+            container.style.visibility = 'hidden';
+            container.style.position = 'fixed';
+            container.style.zIndex = '-9999';
+        }
 
-        const cleanupObservers = () => {
-            nameObserver?.disconnect();
-            removalObserver?.disconnect();
-            nameObserver = null;
-            removalObserver = null;
-        };
-
-        const finalize = (overlayPane) => {
-            if (finished) return;
-            finished = true;
-            cleanupObservers();
-            const pane =
-                overlayPane ||
-                document.querySelector('#account-switcher')?.closest('.cdk-overlay-pane') ||
-                document.querySelector(ACCOUNT_NAME_SELECTOR)?.closest('.cdk-overlay-pane') ||
-                null;
-
-            const onClosed = () => {
-                restoreOverlayContainer(overlaySnapshot);
-                $.accountNameInFlight = false;
-            };
-
-            if (!overlayAlreadyOpen) {
-                closeAccountOverlay(trigger, pane, onClosed, true);
+        const cleanup = () => {
+            // Always restore container and close overlay
+            if (container) {
+                if (originalStyle) {
+                    container.setAttribute('style', originalStyle);
             } else {
-                onClosed();
+                    container.removeAttribute('style');
+                }
             }
+            
+            // Force close the overlay if it's still open - use multiple methods
+            const overlayRoot = document.querySelector('#account-switcher');
+            if (overlayRoot && overlayRoot.isConnected) {
+                const pane = overlayRoot.closest('.cdk-overlay-pane');
+                
+                // Method 1: Click trigger
+                try {
+                    trigger?.click();
+                } catch (e) {
+                    // Ignore
+                }
+                
+                // Method 2: Press Escape
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                
+                // Method 3: If still there after a moment, force remove
+                setTimeout(() => {
+                    const stillThere = document.querySelector('#account-switcher');
+                    if (stillThere && stillThere.isConnected) {
+                        const stillPane = stillThere.closest('.cdk-overlay-pane');
+                        if (stillPane) {
+                            // Force remove the entire overlay pane
+                            const boundingBox = stillPane.parentElement;
+                            if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
+                                boundingBox.remove();
+                            } else {
+                                stillPane.remove();
+                            }
+                        }
+                    }
+                }, 100);
+            }
+            
+            $.accountNameInFlight = false;
         };
 
-        const applyName = (nameEl) => {
-            if (finished) return;
-            if (nameEl) {
-                const name = nameEl.textContent?.trim();
+        // Click to open
+        trigger.click();
+
+        // Use wait() for the overlay to appear, just like preset system
+        wait('#account-switcher', (overlayRoot) => {
+            const nameEl = overlayRoot.querySelector('.name') ||
+                           overlayRoot.querySelector('[class*="name"]') ||
+                           document.querySelector(ACCOUNT_NAME_SELECTOR);
+            
+            if (nameEl && nameEl.textContent?.trim()) {
+                const name = nameEl.textContent.trim();
                 if (name) {
                     label.textContent = name;
+                    $.accountNameFetched = true;
                 }
             }
-            const pane =
-                nameEl?.closest?.('.cdk-overlay-pane') ||
-                document.querySelector('#account-switcher')?.closest('.cdk-overlay-pane') ||
-                null;
-            finalize(pane);
-        };
 
-        const observeOverlay = (overlayRoot) => {
-            if (finished) return;
-            if (!overlayRoot) {
-                finalize(null);
-                return;
-            }
-
-            const pane = overlayRoot.closest('.cdk-overlay-pane');
-            const findName = () => {
-                if (finished) return;
-                const candidate =
-                    overlayRoot.querySelector('.name') ||
-                    overlayRoot.querySelector('[class*="name"]') ||
-                    document.querySelector(ACCOUNT_NAME_SELECTOR);
-                if (candidate && candidate.textContent?.trim()) {
-                    applyName(candidate);
-                }
-            };
-
-            findName();
-            if (finished) return;
-
-            nameObserver = new MutationObserver(findName);
-            nameObserver.observe(overlayRoot, {
-                childList: true,
-                subtree: true,
-                characterData: true
+            // Close immediately - like preset system
+            raf(() => {
+                cleanup();
             });
-
-            if (pane) {
-                removalObserver = new MutationObserver(() => {
-                    if (!pane.isConnected) {
-                        finalize(pane);
-                    }
-                });
-                const target = pane.parentElement ?? document.body;
-                removalObserver.observe(target, { childList: true, subtree: true });
-            } else {
-                removalObserver = new MutationObserver(() => {
-                    if (!overlayRoot.isConnected) {
-                        finalize(null);
-                    }
-                });
-                removalObserver.observe(document.body, { childList: true, subtree: true });
-            }
-        };
-
-        if (!overlayAlreadyOpen) {
-            try {
-                trigger.click();
-            } catch (error) {
-                restoreOverlayContainer(overlaySnapshot);
-                $.accountNameInFlight = false;
-                return;
-            }
-        }
-
-        if (existingOverlayRoot) {
-            observeOverlay(existingOverlayRoot);
-            return;
-        }
-
-        const immediateOverlay = document.querySelector('#account-switcher');
-        if (immediateOverlay) {
-            observeOverlay(immediateOverlay);
-            return;
-        }
-
-        wait(
-            '#account-switcher',
-            (overlayRoot) => observeOverlay(overlayRoot),
-            4000,
-            () => finalize(null)
-        );
-    };
-
-    const observeAccountSwitcher = () => {
-        const accountObs = new MutationObserver(() => {
-            raf(ensureAccountDisplayName);
+        }, 2500, () => {
+            // Timeout: cleanup
+            cleanup();
         });
-
-        accountObs.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'id', 'data-testid', 'aria-label'],
-            characterData: true
-        });
-        $.obs.add(accountObs);
-
-        ensureAccountDisplayName();
     };
 
     class SmartThemeEngine {
@@ -1381,7 +1500,8 @@
                     text: "#FAFAFA"
                 },
                 radius: "6px",
-                borderWidth: "1px"
+                borderWidth: "1px",
+                outlineOpacity: "1"
             };
         }
 
@@ -1439,7 +1559,45 @@
                 document.head.appendChild(this.styleEl);
             }
             this.styleEl.textContent = css;
+            this.adjustPaddingForWebsite(theme, overrides);
             refreshRunButtonContrast();
+        }
+
+        adjustPaddingForWebsite(theme, overrides) {
+            try {
+                const root = document.documentElement;
+                if (!root) return;
+
+                // Parse radius and border values
+                const parsePx = (value, fallback = 0) => {
+                    if (typeof value === 'number') return value;
+                    if (typeof value !== 'string') return fallback;
+                    const numeric = parseFloat(value.replace(/px$/i, ''));
+                    return isFinite(numeric) ? numeric : fallback;
+                };
+
+                const radiusStr = (overrides && overrides.radius) || theme.radius || this.fallbackTheme.radius;
+                const borderStr = (overrides && overrides.borderWidth) || theme.borderWidth || this.fallbackTheme.borderWidth;
+                
+                const radius = parsePx(radiusStr, 6);
+                const border = parsePx(borderStr, 1);
+                
+                // Calculate optimal padding based on border radius and width
+                // Formula: base padding + (radius * factor) + (border * factor)
+                const basePadding = 8; // Base padding in px
+                const radiusFactor = 0.15; // 15% of radius
+                const borderFactor = 1.5; // 150% of border width
+                
+                const calculatedPadding = basePadding + (radius * radiusFactor) + (border * borderFactor);
+                const finalPadding = Math.max(basePadding, Math.round(calculatedPadding * 10) / 10);
+                
+                // Apply calculated padding
+                root.style.setProperty('--bas-padding', `${finalPadding}px`);
+                root.style.setProperty('--bas-padding-sm', `${finalPadding * 0.5}px`);
+                root.style.setProperty('--bas-padding-lg', `${finalPadding * 1.5}px`);
+            } catch (error) {
+                console.error('Error adjusting website padding:', error);
+            }
         }
 
         async generateSmartCSS(theme, overrides) {
@@ -1451,7 +1609,8 @@
                 surface: base.surface || fallbackBase.surface,
                 text: base.text || fallbackBase.text,
                 radius: (overrides && overrides.radius) || theme.radius || this.fallbackTheme.radius,
-                borderWidth: (overrides && overrides.borderWidth) || theme.borderWidth || this.fallbackTheme.borderWidth
+                borderWidth: (overrides && overrides.borderWidth) || theme.borderWidth || this.fallbackTheme.borderWidth,
+                outlineOpacity: (overrides && overrides.outlineOpacity) || theme.outlineOpacity || "1"
             };
 
             const cssConfig = this.config.css || {};
@@ -1572,6 +1731,9 @@
             $.preset = preset;
             if (preset) {
                 queueApply();
+            } else {
+                // No preset active, reset to defaults
+                resetToDefaults();
             }
         });
 
@@ -1579,9 +1741,13 @@
             if (changes.activePresetIndex || changes.presets) {
                 chrome.storage.local.get(['presets', 'activePresetIndex'], (r) => {
                     const preset = r.presets?.[r.activePresetIndex] ?? null;
+                    const wasReset = $.preset && !preset;
                     $.preset = preset;
                     if (preset) {
                         queueApply();
+                    } else if (wasReset) {
+                        // Reset to defaults when preset is cleared
+                        resetToDefaults();
                     }
                 });
             }
@@ -1599,6 +1765,11 @@
         ensureAccountDisplayName();
         requestAnimationFrame(ensureAccountDisplayName);
         requestAnimationFrame(() => requestAnimationFrame(ensureAccountDisplayName));
+        
+        // Run autoFetchAccountName multiple times to ensure it catches quickly
+        setTimeout(() => { if (!$.accountNameFetched) raf(() => autoFetchAccountName()); }, 100);
+        setTimeout(() => { if (!$.accountNameFetched) raf(() => autoFetchAccountName()); }, 300);
+        setTimeout(() => { if (!$.accountNameFetched) raf(() => autoFetchAccountName()); }, 600);
 
         const themeEngine = new SmartThemeEngine();
         if (document.readyState === 'loading') {
@@ -1620,13 +1791,33 @@
         });
     };
 
+    const forceCloseAccountOverlay = () => {
+        // Emergency cleanup: force close any open account overlay
+        const overlayRoot = document.querySelector('#account-switcher');
+        if (overlayRoot && overlayRoot.isConnected) {
+            const pane = overlayRoot.closest('.cdk-overlay-pane');
+            if (pane) {
+                const boundingBox = pane.parentElement;
+                if (boundingBox?.classList?.contains('cdk-overlay-connected-position-bounding-box')) {
+                    boundingBox.remove();
+                } else {
+                    pane.remove();
+                }
+            }
+        }
+    };
+
     window.addEventListener('beforeunload', () => {
+        forceCloseAccountOverlay();
         $.rafs.forEach(cancelAnimationFrame);
         $.rafs.clear();
         $.obs.forEach(o => o.disconnect());
         $.obs.clear();
         $.cache.clear();
     }, { once: true, passive: true });
+    
+    // Also cleanup on any navigation
+    window.addEventListener('pagehide', forceCloseAccountOverlay, { passive: true });
 
     init();
 })()

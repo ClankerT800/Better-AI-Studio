@@ -31,6 +31,14 @@ const formatDisplayPx = (value) => {
   return `${Math.round(numeric * 10) % 10 === 0 ? Math.trunc(numeric) : numeric.toFixed(1)}px`;
 };
 
+const formatOpacity = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "1.00";
+  }
+  return numeric.toFixed(2);
+};
+
 const updateSliderProgress = (slider, value) => {
   if (!(slider instanceof HTMLInputElement)) return;
   const min = Number.parseFloat(slider.min || "0");
@@ -94,7 +102,10 @@ const TEMPLATE = `
     </div>
     <div class="theme-customizer" data-role="customizer-tab">
       <div class="theme-customizer__header">
-        <span class="theme-customizer__title">Border styling</span>
+        <span class="theme-customizer__title">
+          Border styling
+          <span class="theme-tag theme-tag--beta">BETA</span>
+        </span>
         <button
           class="theme-customizer__reset-btn"
           type="button"
@@ -114,7 +125,7 @@ const TEMPLATE = `
               id="theme-border-radius-input"
               type="range"
               min="0"
-              max="24"
+              max="50"
               step="1"
               data-role="radius-slider"
               aria-label="Corner radius in pixels"
@@ -131,12 +142,29 @@ const TEMPLATE = `
               id="theme-border-width-input"
               type="range"
               min="0"
-              max="4"
+              max="5"
               step="0.5"
               data-role="border-slider"
               aria-label="Border width in pixels"
             />
             <span class="theme-customizer__value" data-role="border-value">0px</span>
+          </div>
+        </div>
+        <div class="theme-customizer__field">
+          <label class="theme-customizer__label" for="theme-outline-opacity-input">
+            Outline opacity
+          </label>
+          <div class="theme-customizer__control">
+            <input
+              id="theme-outline-opacity-input"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              data-role="opacity-slider"
+              aria-label="Outline opacity"
+            />
+            <span class="theme-customizer__value" data-role="opacity-value">1.00</span>
           </div>
         </div>
       </div>
@@ -243,12 +271,69 @@ export class SettingsModal {
     const currentTheme = settings.currentTheme;
     this.currentThemeId = currentTheme;
 
+    // Get pinned themes from preferences, default to the three initial themes
+    if (!this.settings.preferences) {
+      this.settings.preferences = {};
+    }
+    if (!this.settings.preferences.pinnedThemes) {
+      this.settings.preferences.pinnedThemes = ["monochrome", "matrix", "midnight"];
+    }
+    this.pinnedThemes = this.settings.preferences.pinnedThemes;
+    console.log('Loaded pinned themes:', this.pinnedThemes);
+
     const grid = this.overlay.querySelector('[data-role="themes-grid"]');
     if (!grid) return;
 
     grid.replaceChildren();
 
-    for (const [themeId, theme] of Object.entries(themes)) {
+    // Define default theme order
+    const defaultOrder = [
+      "monochrome",
+      "matrix",
+      "midnight",
+      "royal",
+      "neon",
+      "ocean",
+      "forest",
+      "sunset",
+      "coral",
+      "arctic",
+      "crimson",
+      "ivory"
+    ];
+
+    // Sort themes: pinned first (in pinned order), then by default order
+    const sortedThemeEntries = Object.entries(themes).sort(([idA], [idB]) => {
+      const isPinnedA = this.pinnedThemes.includes(idA);
+      const isPinnedB = this.pinnedThemes.includes(idB);
+      
+      // Pinned themes go first
+      if (isPinnedA && !isPinnedB) return -1;
+      if (!isPinnedA && isPinnedB) return 1;
+      
+      // If both pinned, sort by pinned order
+      if (isPinnedA && isPinnedB) {
+        return this.pinnedThemes.indexOf(idA) - this.pinnedThemes.indexOf(idB);
+      }
+      
+      // If neither pinned, sort by default order
+      const indexA = defaultOrder.indexOf(idA);
+      const indexB = defaultOrder.indexOf(idB);
+      
+      // If both in default order, use that order
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB;
+      }
+      
+      // If only A is in default order, A comes first
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      
+      // If neither in default order, maintain original order (by id)
+      return idA.localeCompare(idB);
+    });
+
+    for (const [themeId, theme] of sortedThemeEntries) {
       const card = this.createThemeCard(themeId, theme, currentTheme);
       grid.appendChild(card);
     }
@@ -258,14 +343,9 @@ export class SettingsModal {
   }
 
   createThemeCard(themeId, theme, currentThemeId) {
-    const card = this.document.createElement("button");
+    const card = this.document.createElement("div");
     card.className = `theme-card${currentThemeId === themeId ? " active" : ""}`;
-    card.type = "button";
     card.dataset.themeId = themeId;
-    card.setAttribute(
-      "aria-pressed",
-      currentThemeId === themeId ? "true" : "false",
-    );
 
     const colors = theme.base
       ? [
@@ -276,26 +356,103 @@ export class SettingsModal {
         ]
       : ["#666666", "#333333", "#222222", "#ffffff"];
 
+    const isPinned = this.pinnedThemes.includes(themeId);
+    console.log(`Creating card for ${themeId}, isPinned: ${isPinned}`);
+
     card.innerHTML = `
-      <div class="theme-card-header">
-        <span class="theme-name">${theme.name ?? themeId}</span>
-      </div>
-      <div class="theme-preview">
-        <div class="preview-swatches">
-          ${colors.map((color) => `<span class="swatch" style="background-color: ${color};"></span>`).join("")}
+      <button 
+        class="theme-pin-btn" 
+        type="button"
+        data-theme-id="${themeId}"
+        aria-label="${isPinned ? 'Unpin' : 'Pin'} ${theme.name ?? themeId}"
+        title="${isPinned ? 'Unpin theme' : 'Pin theme to top'}"
+      >
+        <svg class="pin-icon ${isPinned ? 'pinned' : ''}" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 12V4H17V2H7V4H8V12L6 14V16H11.2V22H12.8V16H18V14L16 12Z" fill="currentColor"/>
+        </svg>
+      </button>
+      <button 
+        class="theme-card-content" 
+        type="button"
+        aria-pressed="${currentThemeId === themeId ? "true" : "false"}"
+      >
+        <div class="theme-card-header">
+          <span class="theme-name">${theme.name ?? themeId}</span>
         </div>
-      </div>
+        <div class="theme-preview">
+          <div class="preview-swatches">
+            ${colors.map((color) => `<span class="swatch" style="background-color: ${color};"></span>`).join("")}
+          </div>
+        </div>
+      </button>
     `;
 
-    card.addEventListener("click", () => this.selectTheme(themeId));
+    const contentBtn = card.querySelector('.theme-card-content');
+    contentBtn.addEventListener("click", () => this.selectTheme(themeId));
+
+    const pinBtn = card.querySelector('.theme-pin-btn');
+    if (pinBtn) {
+      const handlePinClick = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        console.log('Pin button clicked for:', themeId);
+        this.togglePinTheme(themeId);
+      };
+      pinBtn.addEventListener("click", handlePinClick);
+    } else {
+      console.error('Pin button not found for theme:', themeId);
+    }
+
     return card;
   }
+
+  togglePinTheme = async (themeId) => {
+    console.log('Toggle pin for:', themeId);
+    console.log('Current pinned themes:', this.pinnedThemes);
+    
+    const isPinned = this.pinnedThemes.includes(themeId);
+    console.log('Is pinned:', isPinned);
+
+    if (isPinned) {
+      // Unpin the theme
+      this.pinnedThemes = this.pinnedThemes.filter(id => id !== themeId);
+      console.log('Unpinned, new list:', this.pinnedThemes);
+    } else {
+      // Pin the theme (add to end of pinned list)
+      this.pinnedThemes.push(themeId);
+      console.log('Pinned, new list:', this.pinnedThemes);
+    }
+
+    // Save to storage using merge to avoid conflicts
+    const defaults = await getSyncDefaults();
+    await storageSync.merge(
+      "settings",
+      async (settings) => {
+        const current = settings ?? defaults;
+        return {
+          ...current,
+          preferences: {
+            ...current.preferences,
+            pinnedThemes: this.pinnedThemes,
+          },
+          lastUpdatedAt: Date.now(),
+        };
+      },
+      defaults,
+    );
+    console.log('Saved to storage');
+
+    // Re-render themes to update the order and pin button states
+    await this.renderThemes();
+    console.log('Re-rendered themes');
+  };
 
   initializeCustomizer() {
     if (!this.overlay || this.customizerInitialized) return;
 
     const radiusSlider = this.overlay.querySelector('[data-role="radius-slider"]');
     const borderSlider = this.overlay.querySelector('[data-role="border-slider"]');
+    const opacitySlider = this.overlay.querySelector('[data-role="opacity-slider"]');
     const resetButton = this.overlay.querySelector('[data-role="customizer-reset"]');
 
     if (radiusSlider) {
@@ -306,6 +463,10 @@ export class SettingsModal {
       borderSlider.addEventListener("input", this.handleBorderWidthChange);
       this.sliderEventListeners.push(() => borderSlider.removeEventListener("input", this.handleBorderWidthChange));
     }
+    if (opacitySlider) {
+      opacitySlider.addEventListener("input", this.handleOpacityChange);
+      this.sliderEventListeners.push(() => opacitySlider.removeEventListener("input", this.handleOpacityChange));
+    }
     if (resetButton) {
       resetButton.addEventListener("click", this.handleResetOverrides);
       this.sliderEventListeners.push(() => resetButton.removeEventListener("click", this.handleResetOverrides));
@@ -313,6 +474,7 @@ export class SettingsModal {
 
     updateSliderProgress(radiusSlider, radiusSlider?.value);
     updateSliderProgress(borderSlider, borderSlider?.value);
+    updateSliderProgress(opacitySlider, opacitySlider?.value);
 
     this.customizerInitialized = true;
   }
@@ -324,35 +486,60 @@ export class SettingsModal {
     const fallbackRadius = theme?.radius ?? this.defaultSettings?.themeOverrides?.radius ?? "6px";
     const fallbackBorderWidth =
       theme?.borderWidth ?? this.defaultSettings?.themeOverrides?.borderWidth ?? "1px";
+    const fallbackOpacity = theme?.outlineOpacity ?? this.defaultSettings?.themeOverrides?.outlineOpacity ?? "1";
 
     const radiusValue = overrides.radius ?? fallbackRadius;
     const borderWidthValue = overrides.borderWidth ?? fallbackBorderWidth;
+    const opacityValue = overrides.outlineOpacity ?? fallbackOpacity;
 
     this.currentThemeDefaults = {
       radius: fallbackRadius,
       borderWidth: fallbackBorderWidth,
+      outlineOpacity: fallbackOpacity,
     };
 
     this.setCustomizerControl("radius", radiusValue);
     this.setCustomizerControl("border", borderWidthValue);
+    this.setCustomizerControl("opacity", opacityValue);
     this.refreshResetButton();
   }
 
   setCustomizerControl(type, value) {
     if (!this.overlay) return;
     const isRadius = type === "radius";
-    const slider = this.overlay.querySelector(
-      `[data-role="${isRadius ? "radius-slider" : "border-slider"}"]`,
-    );
-    const valueElement = this.overlay.querySelector(
-      `[data-role="${isRadius ? "radius-value" : "border-value"}"]`,
-    );
+    const isBorder = type === "border";
+    const isOpacity = type === "opacity";
+    
+    let sliderRole, valueRole;
+    if (isRadius) {
+      sliderRole = "radius-slider";
+      valueRole = "radius-value";
+    } else if (isBorder) {
+      sliderRole = "border-slider";
+      valueRole = "border-value";
+    } else if (isOpacity) {
+      sliderRole = "opacity-slider";
+      valueRole = "opacity-value";
+    } else {
+      return;
+    }
+    
+    const slider = this.overlay.querySelector(`[data-role="${sliderRole}"]`);
+    const valueElement = this.overlay.querySelector(`[data-role="${valueRole}"]`);
     if (!slider || !valueElement) return;
 
-    const numeric = parsePx(value, isRadius ? 0 : 1);
-    slider.value = String(numeric);
-    updateSliderProgress(slider, numeric);
-    valueElement.textContent = formatDisplayPx(numeric);
+    if (isOpacity) {
+      const numeric = Number.parseFloat(value);
+      const clamped = Number.isFinite(numeric) ? Math.min(Math.max(numeric, 0), 1) : 1;
+      slider.value = String(clamped);
+      updateSliderProgress(slider, clamped);
+      valueElement.textContent = formatOpacity(clamped);
+    } else {
+      const numeric = parsePx(value, isRadius ? 0 : 1);
+      slider.value = String(numeric);
+      updateSliderProgress(slider, numeric);
+      valueElement.textContent = formatDisplayPx(numeric);
+    }
   }
 
   refreshResetButton() {
@@ -426,10 +613,31 @@ export class SettingsModal {
     }
   };
 
+  handleOpacityChange = (event) => {
+    try {
+      const input = event.currentTarget;
+      if (!(input instanceof HTMLInputElement)) return;
+      const numericValue = input.valueAsNumber ?? Number.parseFloat(input.value);
+      if (!Number.isFinite(numericValue)) return;
+      const formatted = String(numericValue);
+      updateSliderProgress(input, numericValue);
+      const valueElement = this.overlay?.querySelector('[data-role="opacity-value"]');
+      if (valueElement) {
+        valueElement.textContent = formatOpacity(numericValue);
+      }
+    // Apply visual changes immediately and batch storage updates
+    this.applyThemeOverridesImmediately({ outlineOpacity: formatted });
+    this.scheduleStorageUpdate({ outlineOpacity: formatted });
+    } catch (error) {
+      console.error('Error in handleOpacityChange:', error);
+    }
+  };
+
   handleResetOverrides = async () => {
     const defaults = this.currentThemeDefaults;
     const radiusSlider = this.overlay?.querySelector('[data-role="radius-slider"]');
     const borderSlider = this.overlay?.querySelector('[data-role="border-slider"]');
+    const opacitySlider = this.overlay?.querySelector('[data-role="opacity-slider"]');
 
     if (radiusSlider instanceof HTMLInputElement) {
       const defaultRadius = parsePx(defaults.radius, 0);
@@ -451,7 +659,17 @@ export class SettingsModal {
       }
     }
 
-    await this.applyOverrideChanges({ radius: null, borderWidth: null }, false);
+    if (opacitySlider instanceof HTMLInputElement) {
+      const defaultOpacity = Number.parseFloat(defaults.outlineOpacity ?? "1");
+      opacitySlider.value = String(defaultOpacity);
+      updateSliderProgress(opacitySlider, defaultOpacity);
+      const valueElement = this.overlay?.querySelector('[data-role="opacity-value"]');
+      if (valueElement) {
+        valueElement.textContent = formatOpacity(defaultOpacity);
+      }
+    }
+
+    await this.applyOverrideChanges({ radius: null, borderWidth: null, outlineOpacity: null }, true);
     // Clear any pending overrides since we're resetting
     this.pendingOverrides = {};
   };
@@ -517,6 +735,8 @@ export class SettingsModal {
                 root.style.setProperty('--bas-radius', this.currentThemeDefaults.radius || '6px');
               } else if (key === 'borderWidth') {
                 root.style.setProperty('--bas-border-width', this.currentThemeDefaults.borderWidth || '1px');
+              } else if (key === 'outlineOpacity') {
+                root.style.setProperty('--bas-outline-opacity', this.currentThemeDefaults.outlineOpacity || '1');
               }
             } else {
               // Apply override
@@ -524,15 +744,50 @@ export class SettingsModal {
                 root.style.setProperty('--bas-radius', value);
               } else if (key === 'borderWidth') {
                 root.style.setProperty('--bas-border-width', value);
+              } else if (key === 'outlineOpacity') {
+                root.style.setProperty('--bas-outline-opacity', value);
               }
             }
           } catch (error) {
             console.error('Error applying theme override:', key, value, error);
           }
         }
+        
+        // Automatically adjust padding based on border radius and width
+        this.adjustElementPadding();
       });
     } catch (error) {
       console.error('Error in applyThemeOverridesImmediately:', error);
+    }
+  }
+
+  adjustElementPadding() {
+    try {
+      const root = this.document.documentElement;
+      if (!root) return;
+
+      // Get current values
+      const radiusStr = getComputedStyle(root).getPropertyValue('--bas-radius').trim();
+      const borderStr = getComputedStyle(root).getPropertyValue('--bas-border-width').trim();
+      
+      const radius = parsePx(radiusStr, 6);
+      const border = parsePx(borderStr, 1);
+      
+      // Calculate optimal padding based on border radius and width
+      // Formula: base padding + (radius * factor) + (border * factor)
+      const basePadding = 8; // Base padding in px
+      const radiusFactor = 0.15; // 15% of radius
+      const borderFactor = 1.5; // 150% of border width
+      
+      const calculatedPadding = basePadding + (radius * radiusFactor) + (border * borderFactor);
+      const finalPadding = Math.max(basePadding, Math.round(calculatedPadding * 10) / 10);
+      
+      // Apply calculated padding
+      root.style.setProperty('--bas-padding', `${finalPadding}px`);
+      root.style.setProperty('--bas-padding-sm', `${finalPadding * 0.5}px`);
+      root.style.setProperty('--bas-padding-lg', `${finalPadding * 1.5}px`);
+    } catch (error) {
+      console.error('Error adjusting element padding:', error);
     }
   }
 }
