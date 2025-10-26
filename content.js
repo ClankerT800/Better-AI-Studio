@@ -161,6 +161,34 @@
 .bas-run-button__native-icon {
   display: none !important;
 }
+ms-prompt-feedback .blocked-content-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+  max-width: 100% !important;
+}
+ms-prompt-feedback .blocked-text,
+span.blocked-text {
+  display: block !important;
+  text-align: center !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--color-v3-text-var, rgba(255, 255, 255, 0.65)) !important;
+  padding: 8px 16px !important;
+  background: var(--color-v3-surface-container, rgba(255, 255, 255, 0.05)) !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--color-v3-outline-var, rgba(255, 255, 255, 0.1)) !important;
+  margin: 0 !important;
+}
+ms-prompt-feedback img.loaded-image {
+  cursor: pointer !important;
+  max-height: min(30vh, 358px) !important;
+  max-width: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 8px !important;
+}
 `;
             head.appendChild(styleEl);
         }
@@ -2134,22 +2162,53 @@ input[type="number"] {
             return `rgba(${r}, ${g}, ${b}, ${opacity})`;
         };
         
+        const borderWidth = settings.borderWidth !== undefined ? settings.borderWidth : 1;
+        const borderOpacity = settings.borderOpacity !== undefined ? settings.borderOpacity : 1;
         const borderRule = settings.showBorder 
-            ? `border: ${settings.borderWidth || 1}px solid ${hexToRgba(settings.borderColor, settings.borderOpacity || 1)} !important;` 
+            ? `border: ${borderWidth}px solid ${hexToRgba(settings.borderColor, borderOpacity)} !important;` 
             : `border: none !important;`;
         
+        const glowIntensity = settings.glowIntensity !== undefined ? settings.glowIntensity : 20;
+        const glowOpacity = settings.glowOpacity !== undefined ? settings.glowOpacity : 1;
         const glowRule = settings.showGlow
-            ? `box-shadow: 0 0 ${settings.glowIntensity || 20}px ${hexToRgba(settings.glowColor, settings.glowOpacity || 1)} !important;`
+            ? `box-shadow: 0 0 ${glowIntensity}px ${hexToRgba(settings.glowColor, glowOpacity)} !important;`
             : `box-shadow: none !important;`;
         
-        const maxWidth = settings.maxWidth || 1000;
-        const bottomPosition = settings.bottomPosition || 0;
+        const maxWidth = settings.maxWidth !== undefined ? settings.maxWidth : 1000;
+        const bottomPosition = settings.bottomPosition !== undefined ? settings.bottomPosition : 0;
+        const borderRadius = settings.borderRadius !== undefined ? settings.borderRadius : 30;
         
         styleTag.textContent = `
+            .prompt-input-wrapper,
+            .prompt-input-wrapper[class*="_ngcontent"],
             .prompt-input-wrapper.row.v3,
             .prompt-input-wrapper[msfiledragdrop] {
-                border-radius: 13px !important;
-                background: none !important;
+                background: ${settings.backgroundColor} !important;
+                color: ${settings.textColor} !important;
+                border-radius: ${borderRadius}px !important;
+                padding: 12px !important;
+                padding-left: 12px !important;
+                ${borderRule}
+                ${glowRule}
+                max-width: ${maxWidth}px !important;
+                margin-bottom: ${bottomPosition}px !important;
+            }
+            
+            .prompt-input-wrapper textarea,
+            .prompt-input-wrapper input[type="text"],
+            .prompt-input-wrapper .text-input,
+            .prompt-input-wrapper [contenteditable],
+            .prompt-input-wrapper .mat-mdc-input-element {
+                background: transparent !important;
+                color: ${settings.textColor} !important;
+                caret-color: ${settings.textColor} !important;
+            }
+            
+            .prompt-input-wrapper textarea::placeholder,
+            .prompt-input-wrapper input::placeholder,
+            .prompt-input-wrapper .text-input::placeholder {
+                color: ${settings.textColor} !important;
+                opacity: 0.6 !important;
             }
         `;
 
@@ -2161,7 +2220,169 @@ input[type="number"] {
         applyTextInputStyling($.elementSettings.textInput);
     };
 
+    const openImagePreview = (imageSrc, altText) => {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'cdk-overlay-container';
+        overlay.innerHTML = `
+            <div class="cdk-overlay-backdrop dialog-backdrop-blur-overlay cdk-overlay-backdrop-showing"></div>
+            <div class="cdk-global-overlay-wrapper" dir="ltr" style="justify-content: center; align-items: center;">
+                <div class="cdk-overlay-pane mat-mdc-dialog-panel" style="min-width: min(500px, 90vw); position: static;">
+                    <mat-dialog-container tabindex="-1" class="mat-mdc-dialog-container mdc-dialog cdk-dialog-container mdc-dialog--open" style="--mat-dialog-transition-duration: 150ms;">
+                        <div class="mat-mdc-dialog-inner-container mdc-dialog__container">
+                            <div class="mat-mdc-dialog-surface mdc-dialog__surface">
+                                <div class="action-confirmation action-confirmation-wide view-media-dialog">
+                                    <header class="mat-mdc-dialog-title mdc-dialog__title shared-dialog-header">
+                                        <div class="text">${altText || 'Content blocked'}</div>
+                                        <div class="actions">
+                                            <button class="close-button ms-button-borderless ms-button-icon" aria-label="Close" title="Close">
+                                                <span class="material-symbols-outlined notranslate ms-button-icon-symbol" aria-hidden="true">close</span>
+                                            </button>
+                                        </div>
+                                    </header>
+                                    <main>
+                                        <div tabindex="0" class="image-container">
+                                            <img class="main-media-item main-image" src="${imageSrc}" alt="${altText || 'Content blocked'}">
+                                        </div>
+                                    </main>
+                                </div>
+                            </div>
+                        </div>
+                    </mat-dialog-container>
+                </div>
+            </div>
+        `;
+
+        // Add to body
+        document.body.appendChild(overlay);
+
+        // Close handlers
+        const closeModal = () => {
+            overlay.remove();
+        };
+
+        overlay.querySelector('.close-button').addEventListener('click', closeModal);
+        overlay.querySelector('.cdk-overlay-backdrop').addEventListener('click', closeModal);
+        
+        // ESC key handler
+        const handleKeydown = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', handleKeydown);
+            }
+        };
+        document.addEventListener('keydown', handleKeydown);
+    };
+
+    const processContentBlockedElement = (feedbackElement) => {
+        if (!feedbackElement) return;
+        
+        // Check if this element has blocked content (either original text or already processed)
+        const hasBlockedText = feedbackElement.textContent.includes('Content blocked');
+        const hasBlockedContainer = feedbackElement.querySelector('.blocked-content-container');
+        
+        if (!hasBlockedText && !hasBlockedContainer) return;
+        
+        // Store complete original HTML before any processing
+        const originalHTML = hasBlockedContainer ? 
+            (feedbackElement.dataset.originalHTML || feedbackElement.innerHTML) :
+            feedbackElement.innerHTML;
+        
+        console.log('[BAS] Processing blocked content element');
+        
+        Promise.all([
+            chrome.storage.sync.get(['contentBlockedFeatureEnabled', 'contentBlockedImageUrl']),
+            chrome.storage.local.get(['contentBlockedImageUrl'])
+        ]).then(([syncData, localData]) => {
+            console.log('[BAS] Storage data:', { syncData, localData });
+            const isEnabled = syncData.contentBlockedFeatureEnabled !== false;
+            
+            // If feature is disabled, restore complete original HTML
+            if (!isEnabled) {
+                console.log('[BAS] Feature disabled, restoring original HTML');
+                if (hasBlockedContainer) {
+                    feedbackElement.innerHTML = originalHTML;
+                    delete feedbackElement.dataset.originalHTML;
+                }
+                return;
+            }
+            
+            const imageUrl = localData.contentBlockedImageUrl || syncData.contentBlockedImageUrl || 'https://media1.tenor.com/m/h75s9-F1i0MAAAAC/james-doakes.gif';
+            console.log('[BAS] Using image URL:', imageUrl);
+            const blockedText = hasBlockedContainer ? feedbackElement.querySelector('.blocked-text')?.textContent || 'Content blocked' : feedbackElement.textContent.trim();
+
+            const container = document.createElement('div');
+            container.className = 'blocked-content-container';
+
+            const image = document.createElement('img');
+            image.src = imageUrl;
+            image.className = 'loaded-image';
+            image.alt = 'Content blocked';
+            
+            // Add click handler for image preview
+            image.addEventListener('click', () => {
+                openImagePreview(imageUrl, 'Content blocked');
+            });
+
+            const textNode = document.createElement('span');
+            textNode.textContent = blockedText;
+            textNode.className = 'blocked-text';
+
+            container.appendChild(image);
+            container.appendChild(textNode);
+
+            // Store complete original HTML to restore later
+            feedbackElement.dataset.originalHTML = originalHTML;
+            
+            feedbackElement.innerHTML = '';
+            feedbackElement.appendChild(container);
+        });
+    };
+
+    const observeContentBlockedMessages = () => {
+        const processAll = () => {
+            const elements = document.querySelectorAll('ms-prompt-feedback');
+            console.log('[BAS] Processing blocked content, found', elements.length, 'elements');
+            elements.forEach(processContentBlockedElement);
+        };
+        
+        // Immediate processing
+        processAll();
+        
+        // Keep checking for new elements
+        setTimeout(processAll, 50);
+        setTimeout(processAll, 100);
+        setTimeout(processAll, 200);
+        setTimeout(processAll, 500);
+        setTimeout(processAll, 1000);
+        setTimeout(processAll, 2000);
+        setTimeout(processAll, 3000);
+        setTimeout(processAll, 5000);
+
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        if (node.matches && node.matches('ms-prompt-feedback')) {
+                            processContentBlockedElement(node);
+                        }
+                        const feedbackElements = node.querySelectorAll ? node.querySelectorAll('ms-prompt-feedback') : [];
+                        feedbackElements.forEach(processContentBlockedElement);
+                    }
+                });
+            });
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        $.obs.add(observer);
+    };
+
     const init = async () => {
+        console.log('[BAS] Content script initializing...');
+        
         // Restore any hidden messages immediately
         restoreHiddenMessages();
         
@@ -2205,6 +2426,7 @@ input[type="number"] {
         observeSparkIcons();
         setupHistoryButtonAnimation();
         setupRecentlyViewedDropdown();
+        observeContentBlockedMessages();
         setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
 
         // INSTANT execution - start immediately with zero delays
@@ -2232,8 +2454,6 @@ input[type="number"] {
             initTheme();
         }
 
-        // Virtualization removed - was not working correctly
-
         chrome.runtime.onMessage.addListener((message) => {
             if (message.type === 'THEME_CHANGED') {
                 themeEngine.loadTheme();
@@ -2257,17 +2477,22 @@ input[type="number"] {
                 // Update history animation setting
                 $.elementSettings.historyAnimation = message.enabled;
             } else if (message.type === 'UPDATE_TEXT_INPUT_STYLING') {
-                // Update text input styling setting for current theme
-                const themeId = message.themeId || $.elementSettings.currentThemeId;
-                
-                // Only apply if it's for the current theme
+                // INSTANT apply - but only if theme matches current page theme
                 chrome.storage.sync.get('settings', (data) => {
-                    const currentTheme = data.settings?.currentTheme || 'monochrome';
-                    if (themeId === currentTheme) {
+                    const currentPageTheme = data.settings?.currentTheme || 'monochrome';
+                    if (message.themeId === currentPageTheme) {
                         $.elementSettings.textInput = message.settings;
                         applyTextInputStyling(message.settings);
                     }
                 });
+            } else if (message.type === 'CONTENT_BLOCKED_FEATURE_CHANGED') {
+                console.log('[BAS] Feature toggle changed:', message.enabled);
+                // Re-process all blocked content when feature is toggled - INSTANT
+                document.querySelectorAll('ms-prompt-feedback').forEach(processContentBlockedElement);
+            } else if (message.type === 'CONTENT_BLOCKED_IMAGE_CHANGED') {
+                console.log('[BAS] Image changed:', message.imageUrl);
+                // Re-process all blocked content when image is changed - INSTANT
+                document.querySelectorAll('ms-prompt-feedback').forEach(processContentBlockedElement);
             }
         });
     };

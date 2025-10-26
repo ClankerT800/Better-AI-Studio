@@ -97,10 +97,44 @@ const TEMPLATE = `
     <div class="modal-nav">
       <button class="nav-tab active" data-tab="themes" type="button">Themes</button>
       <button class="nav-tab" data-tab="elements" type="button">Elements</button>
-      <button class="nav-tab" data-tab="optimization" type="button">Optimization</button>
+
+      <button class="nav-tab" data-tab="for-fun" type="button">For Fun</button>
       <button class="nav-tab" data-tab="general" type="button">General</button>
     </div>
     <div class="modal-content">
+      <div class="tab-content" data-tab-content="for-fun">
+        <section class="settings-section">
+          <h3 class="section-title">For Fun Settings</h3>
+          <div class="fun-settings-container">
+            <div class="setting-item">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">Content Blocked Image</label>
+                  <p class="setting-description">Customize the image displayed for blocked content.</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="content-blocked-feature-toggle" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="image-setting-container">
+                <div id="content-blocked-image-dropzone" class="dropzone-preview">
+                  <div class="image-preview" id="content-blocked-image-preview"></div>
+                  <div class="dropzone-overlay">
+                    <p>Drag & Drop</p>
+                  </div>
+                  <button class="remove-image-btn" id="remove-content-blocked-image" title="Remove image">×</button>
+                </div>
+                <div class="image-controls">
+                  <input type="file" id="content-blocked-image-input" accept="image/*" style="display: none;">
+                  <label for="content-blocked-image-input" class="button">Choose File</label>
+                  <input type="text" id="content-blocked-image-url" class="themed-input" placeholder="Image URL" value="https://media1.tenor.com/m/h75s9-F1i0MAAAAC/james-doakes.gif">
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
       <div class="tab-content active" data-tab-content="themes">
         <section class="themes-section">
           <h3 class="section-title">Themes</h3>
@@ -192,7 +226,7 @@ const TEMPLATE = `
                       <div class="slider-pair__item">
                         <label>Stroke</label>
                         <div class="ctrl-row">
-                          <input type="range" min="0" max="5" step="0.5" value="1" data-role="text-input-border-width" />
+                          <input type="range" min="0" max="5" step="0.1" value="1" data-role="text-input-border-width" />
                           <span data-role="text-input-border-width-value">1px</span>
                         </div>
                       </div>
@@ -245,7 +279,7 @@ const TEMPLATE = `
                           <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                       </div>
-                      <div class="advanced-content" data-role="advanced-content" style="display: none;">
+                      <div class="advanced-content" data-role="advanced-content" style="display: block;">
                         <div class="advanced-controls">
                           <div class="advanced-ctrl">
                             <label>Max Width</label>
@@ -274,14 +308,7 @@ const TEMPLATE = `
           </div>
         </section>
       </div>
-      <div class="tab-content" data-tab-content="optimization">
-        <section class="settings-section">
-          <h3 class="section-title">Performance & Optimization</h3>
-          <div class="settings-group">
-            <p class="setting-description" style="text-align: center; padding: 40px 20px; opacity: 0.6;">No optimization settings available</p>
-          </div>
-        </section>
-      </div>
+
       <div class="tab-content" data-tab-content="general">
         <section class="settings-section">
           <h3 class="section-title">General Settings</h3>
@@ -410,6 +437,8 @@ export class SettingsModal {
     this.currentThemeId = null;
     this.currentThemeDefaults = { radius: "", borderWidth: "" };
     this.customizerInitialized = false;
+    this.elementsTabInitialized = false;
+    this.textInputDefaults = null;
     this.sliderEventListeners = [];
     this.pendingOverrides = {};
     this.storageUpdateTimeout = null;
@@ -425,7 +454,7 @@ export class SettingsModal {
     await this.renderThemes();
     this.initGeneralTab();
     this.initElementsTab();
-    this.initOptimizationTab();
+    this.initForFunTab();
     const closeButton = this.overlay.querySelector(".modal-close-btn");
     closeButton?.focus();
   }
@@ -804,10 +833,8 @@ export class SettingsModal {
     this.currentThemeId = themeId;
     this.applyCustomizerValues(this.themes?.[themeId]);
     
-    // Refresh text input controls if on Elements tab to load per-theme settings
-    if (this.currentTab === 'elements' && this.refreshTextInputControls) {
-      this.refreshTextInputControls();
-    }
+    // INSTANT refresh: Always refresh elements tab when theme changes
+    await this.initElementsTab();
   }
 
   handleRadiusChange = (event) => {
@@ -1064,6 +1091,11 @@ export class SettingsModal {
       content.classList.toggle('active', isActive);
     });
 
+    // INSTANT refresh: When switching to elements tab, refresh it to show current theme settings
+    if (tabName === 'elements') {
+      this.initElementsTab();
+    }
+
     // Show/hide customizer based on active tab
     this.updateCustomizerVisibility();
   }
@@ -1123,7 +1155,11 @@ export class SettingsModal {
     const currentThemeId = settings?.currentTheme || 'monochrome';
     const currentTheme = themes?.[currentThemeId];
     
-    const textInputDefaults = {
+    // Store current theme ID on instance so save function always uses correct theme
+    this.currentThemeId = currentThemeId;
+    
+    // Store theme-specific defaults on instance so reset button always uses current theme
+    this.textInputDefaults = {
       borderRadius: 30,
       showBorder: false,
       backgroundColor: currentTheme?.base?.background || '#18181B',
@@ -1138,38 +1174,14 @@ export class SettingsModal {
       maxWidth: 1000,
       bottomPosition: 0
     };
+    const textInputDefaults = this.textInputDefaults;
 
     // Get per-theme settings
     if (!elementSettings.textInputByTheme) {
       elementSettings.textInputByTheme = {};
     }
-    const textInputSettings = elementSettings.textInputByTheme[currentThemeId] || textInputDefaults;
-
-    // Dropdown toggle
-    const textInputHeader = this.overlay.querySelector('[data-role="text-input-header"]');
-    const textInputSection = this.overlay.querySelector('.text-input-section');
-    const chevron = textInputHeader?.querySelector('.setting-chevron');
-    
-    if (textInputHeader && textInputSection && chevron) {
-      textInputHeader.addEventListener('click', () => {
-        const isHidden = textInputSection.style.display === 'none';
-        textInputSection.style.display = isHidden ? 'flex' : 'none';
-        chevron.classList.toggle('expanded', isHidden);
-      });
-    }
-
-    // Advanced dropdown toggle
-    const advancedHeader = this.overlay.querySelector('[data-role="advanced-header"]');
-    const advancedContent = this.overlay.querySelector('[data-role="advanced-content"]');
-    const advancedChevron = advancedHeader?.querySelector('.advanced-chevron');
-    
-    if (advancedHeader && advancedContent && advancedChevron) {
-      advancedHeader.addEventListener('click', () => {
-        const isHidden = advancedContent.style.display === 'none';
-        advancedContent.style.display = isHidden ? 'block' : 'none';
-        advancedChevron.classList.toggle('expanded', isHidden);
-      });
-    }
+    const savedSettings = elementSettings.textInputByTheme[currentThemeId];
+    const textInputSettings = savedSettings ? { ...textInputDefaults, ...savedSettings } : textInputDefaults;
 
     // Get all controls
     const radiusSlider = this.overlay.querySelector('[data-role="text-input-radius"]');
@@ -1208,20 +1220,22 @@ export class SettingsModal {
       updateSliderProgress(radiusSlider, textInputSettings.borderRadius);
     }
     if (borderToggle) {
-      borderToggle.checked = textInputSettings.showBorder || false;
+      borderToggle.checked = textInputSettings.showBorder !== undefined ? textInputSettings.showBorder : false;
       if (borderSliders) {
         borderSliders.style.display = borderToggle.checked ? 'block' : 'none';
       }
     }
     if (borderWidthSlider && borderWidthValue) {
-      borderWidthSlider.value = textInputSettings.borderWidth || textInputDefaults.borderWidth;
-      borderWidthValue.textContent = `${textInputSettings.borderWidth || textInputDefaults.borderWidth}px`;
-      updateSliderProgress(borderWidthSlider, textInputSettings.borderWidth || textInputDefaults.borderWidth);
+      const borderWidth = textInputSettings.borderWidth !== undefined ? textInputSettings.borderWidth : textInputDefaults.borderWidth;
+      borderWidthSlider.value = borderWidth;
+      borderWidthValue.textContent = `${borderWidth}px`;
+      updateSliderProgress(borderWidthSlider, borderWidth);
     }
     if (borderOpacitySlider && borderOpacityValue) {
-      borderOpacitySlider.value = textInputSettings.borderOpacity || textInputDefaults.borderOpacity;
-      borderOpacityValue.textContent = `${Math.round((textInputSettings.borderOpacity || textInputDefaults.borderOpacity) * 100)}%`;
-      updateSliderProgress(borderOpacitySlider, textInputSettings.borderOpacity || textInputDefaults.borderOpacity);
+      const borderOpacity = textInputSettings.borderOpacity !== undefined ? textInputSettings.borderOpacity : textInputDefaults.borderOpacity;
+      borderOpacitySlider.value = borderOpacity;
+      borderOpacityValue.textContent = `${Math.round(borderOpacity * 100)}%`;
+      updateSliderProgress(borderOpacitySlider, borderOpacity);
     }
     if (bgColorPicker && bgColorHex) {
       bgColorPicker.value = textInputSettings.backgroundColor;
@@ -1232,52 +1246,56 @@ export class SettingsModal {
       textColorHex.value = textInputSettings.textColor.toUpperCase();
     }
     if (borderColorPicker) {
-      borderColorPicker.value = textInputSettings.borderColor || textInputDefaults.borderColor;
+      borderColorPicker.value = textInputSettings.borderColor !== undefined ? textInputSettings.borderColor : textInputDefaults.borderColor;
     }
     if (glowToggle) {
-      glowToggle.checked = textInputSettings.showGlow || false;
+      glowToggle.checked = textInputSettings.showGlow !== undefined ? textInputSettings.showGlow : false;
       if (glowSliders) {
         glowSliders.style.display = glowToggle.checked ? 'block' : 'none';
       }
     }
     if (glowIntensitySlider && glowIntensityValue) {
-      glowIntensitySlider.value = textInputSettings.glowIntensity || textInputDefaults.glowIntensity;
-      glowIntensityValue.textContent = `${textInputSettings.glowIntensity || textInputDefaults.glowIntensity}px`;
-      updateSliderProgress(glowIntensitySlider, textInputSettings.glowIntensity || textInputDefaults.glowIntensity);
+      const glowIntensity = textInputSettings.glowIntensity !== undefined ? textInputSettings.glowIntensity : textInputDefaults.glowIntensity;
+      glowIntensitySlider.value = glowIntensity;
+      glowIntensityValue.textContent = `${glowIntensity}px`;
+      updateSliderProgress(glowIntensitySlider, glowIntensity);
     }
     if (glowOpacitySlider && glowOpacityValue) {
-      glowOpacitySlider.value = textInputSettings.glowOpacity || textInputDefaults.glowOpacity;
-      glowOpacityValue.textContent = `${Math.round((textInputSettings.glowOpacity || textInputDefaults.glowOpacity) * 100)}%`;
-      updateSliderProgress(glowOpacitySlider, textInputSettings.glowOpacity || textInputDefaults.glowOpacity);
+      const glowOpacity = textInputSettings.glowOpacity !== undefined ? textInputSettings.glowOpacity : textInputDefaults.glowOpacity;
+      glowOpacitySlider.value = glowOpacity;
+      glowOpacityValue.textContent = `${Math.round(glowOpacity * 100)}%`;
+      updateSliderProgress(glowOpacitySlider, glowOpacity);
     }
     if (glowColorPicker) {
-      glowColorPicker.value = textInputSettings.glowColor || textInputDefaults.glowColor;
+      glowColorPicker.value = textInputSettings.glowColor !== undefined ? textInputSettings.glowColor : textInputDefaults.glowColor;
     }
     if (maxWidthSlider && maxWidthValue) {
-      maxWidthSlider.value = textInputSettings.maxWidth || textInputDefaults.maxWidth;
-      maxWidthValue.textContent = `${textInputSettings.maxWidth || textInputDefaults.maxWidth}px`;
-      updateSliderProgress(maxWidthSlider, textInputSettings.maxWidth || textInputDefaults.maxWidth);
+      const maxWidth = textInputSettings.maxWidth !== undefined ? textInputSettings.maxWidth : textInputDefaults.maxWidth;
+      maxWidthSlider.value = maxWidth;
+      maxWidthValue.textContent = `${maxWidth}px`;
+      updateSliderProgress(maxWidthSlider, maxWidth);
     }
     if (bottomPositionSlider && bottomPositionValue) {
-      bottomPositionSlider.value = textInputSettings.bottomPosition || textInputDefaults.bottomPosition;
-      bottomPositionValue.textContent = `${textInputSettings.bottomPosition || textInputDefaults.bottomPosition}px`;
-      updateSliderProgress(bottomPositionSlider, textInputSettings.bottomPosition || textInputDefaults.bottomPosition);
+      const bottomPosition = textInputSettings.bottomPosition !== undefined ? textInputSettings.bottomPosition : textInputDefaults.bottomPosition;
+      bottomPositionSlider.value = bottomPosition;
+      bottomPositionValue.textContent = `${bottomPosition}px`;
+      updateSliderProgress(bottomPositionSlider, bottomPosition);
     }
 
     // Update preview function
     const updatePreview = () => {
       if (!previewContainer) return;
-      const radius = parseInt(radiusSlider?.value || textInputDefaults.borderRadius);
-      const showBorder = borderToggle?.checked || false;
-      const showGlow = glowToggle?.checked || false;
+      const radius = radiusSlider?.value !== undefined ? parseInt(radiusSlider.value) : textInputDefaults.borderRadius;
+      const showBorder = borderToggle?.checked !== undefined ? borderToggle.checked : false;
+      const showGlow = glowToggle?.checked !== undefined ? glowToggle.checked : false;
       const bgColor = bgColorPicker?.value || textInputDefaults.backgroundColor;
       const textColor = textColorPicker?.value || textInputDefaults.textColor;
       const borderColor = borderColorPicker?.value || textInputDefaults.borderColor;
-      const borderWidth = parseFloat(borderWidthSlider?.value || textInputDefaults.borderWidth);
-      const borderOpacity = parseFloat(borderOpacitySlider?.value || textInputDefaults.borderOpacity);
+      const borderWidth = borderWidthSlider?.value !== undefined ? parseFloat(borderWidthSlider.value) : textInputDefaults.borderWidth;
+      const borderOpacity = borderOpacitySlider?.value !== undefined ? parseFloat(borderOpacitySlider.value) : textInputDefaults.borderOpacity;
       const glowColor = glowColorPicker?.value || textInputDefaults.glowColor;
-      const glowIntensity = parseInt(glowIntensitySlider?.value || textInputDefaults.glowIntensity);
-      const glowOpacity = parseFloat(glowOpacitySlider?.value || textInputDefaults.glowOpacity);
+      const glowIntensity = glowIntensitySlider?.value !== undefined ? parseInt(glowIntensitySlider.value) : textInputDefaults.glowIntensity;
+      const glowOpacity = glowOpacitySlider?.value !== undefined ? parseFloat(glowOpacitySlider.value) : textInputDefaults.glowOpacity;
 
       previewContainer.style.borderRadius = `${radius}px`;
       previewContainer.style.backgroundColor = bgColor;
@@ -1309,56 +1327,136 @@ export class SettingsModal {
     };
 
     let saveTimeout = null;
-    // Save settings function with debouncing to prevent breaking - per theme
-    const saveTextInputSettings = () => {
-      if (saveTimeout) {
-        clearTimeout(saveTimeout);
+    
+    // Store function that queries fresh DOM elements each time
+    this.applyTextInputImmediately = () => {
+      // Query fresh DOM elements
+      const freshRadiusSlider = this.overlay?.querySelector('[data-role="text-input-radius"]');
+      const freshBorderToggle = this.overlay?.querySelector('[data-role="text-input-border-toggle"] input[type="checkbox"]');
+      const freshBgColorPicker = this.overlay?.querySelector('[data-role="text-input-bg-color"]');
+      const freshTextColorPicker = this.overlay?.querySelector('[data-role="text-input-text-color"]');
+      const freshBorderColorPicker = this.overlay?.querySelector('[data-role="text-input-border-color"]');
+      const freshBorderWidthSlider = this.overlay?.querySelector('[data-role="text-input-border-width"]');
+      const freshBorderOpacitySlider = this.overlay?.querySelector('[data-role="text-input-border-opacity"]');
+      const freshGlowToggle = this.overlay?.querySelector('[data-role="text-input-glow-toggle"] input[type="checkbox"]');
+      const freshGlowColorPicker = this.overlay?.querySelector('[data-role="text-input-glow-color"]');
+      const freshGlowIntensitySlider = this.overlay?.querySelector('[data-role="text-input-glow-intensity"]');
+      const freshGlowOpacitySlider = this.overlay?.querySelector('[data-role="text-input-glow-opacity"]');
+      const freshMaxWidthSlider = this.overlay?.querySelector('[data-role="text-input-max-width"]');
+      const freshBottomPositionSlider = this.overlay?.querySelector('[data-role="text-input-bottom-position"]');
+      
+      const defaults = this.textInputDefaults;
+      const settings = {
+        borderRadius: freshRadiusSlider?.value !== undefined ? parseInt(freshRadiusSlider.value) : defaults.borderRadius,
+        showBorder: freshBorderToggle?.checked !== undefined ? freshBorderToggle.checked : false,
+        backgroundColor: freshBgColorPicker?.value || defaults.backgroundColor,
+        textColor: freshTextColorPicker?.value || defaults.textColor,
+        borderColor: freshBorderColorPicker?.value || defaults.borderColor,
+        borderWidth: freshBorderWidthSlider?.value !== undefined ? parseFloat(freshBorderWidthSlider.value) : defaults.borderWidth,
+        borderOpacity: freshBorderOpacitySlider?.value !== undefined ? parseFloat(freshBorderOpacitySlider.value) : defaults.borderOpacity,
+        showGlow: freshGlowToggle?.checked !== undefined ? freshGlowToggle.checked : false,
+        glowColor: freshGlowColorPicker?.value || defaults.glowColor,
+        glowIntensity: freshGlowIntensitySlider?.value !== undefined ? parseInt(freshGlowIntensitySlider.value) : defaults.glowIntensity,
+        glowOpacity: freshGlowOpacitySlider?.value !== undefined ? parseFloat(freshGlowOpacitySlider.value) : defaults.glowOpacity,
+        maxWidth: freshMaxWidthSlider?.value !== undefined ? parseInt(freshMaxWidthSlider.value) : defaults.maxWidth,
+        bottomPosition: freshBottomPositionSlider?.value !== undefined ? parseInt(freshBottomPositionSlider.value) : defaults.bottomPosition
+      };
+      
+      chrome.tabs.query({ url: '*://aistudio.google.com/*' }, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, { 
+            type: 'UPDATE_TEXT_INPUT_STYLING', 
+            settings: settings,
+            themeId: this.settings?.currentTheme || 'monochrome'
+          }).catch(() => {});
+        });
+      });
+    };
+    
+    // Store save function on instance so event listeners always use current version
+    this.saveTextInputSettings = () => {
+      if (this.saveTextInputTimeout) {
+        clearTimeout(this.saveTextInputTimeout);
       }
       
-      saveTimeout = setTimeout(async () => {
+      this.saveTextInputTimeout = setTimeout(async () => {
         try {
+          // Query fresh DOM elements to get current values
+          const freshRadiusSlider = this.overlay?.querySelector('[data-role="text-input-radius"]');
+          const freshBorderToggle = this.overlay?.querySelector('[data-role="text-input-border-toggle"] input[type="checkbox"]');
+          const freshBgColorPicker = this.overlay?.querySelector('[data-role="text-input-bg-color"]');
+          const freshTextColorPicker = this.overlay?.querySelector('[data-role="text-input-text-color"]');
+          const freshBorderColorPicker = this.overlay?.querySelector('[data-role="text-input-border-color"]');
+          const freshBorderWidthSlider = this.overlay?.querySelector('[data-role="text-input-border-width"]');
+          const freshBorderOpacitySlider = this.overlay?.querySelector('[data-role="text-input-border-opacity"]');
+          const freshGlowToggle = this.overlay?.querySelector('[data-role="text-input-glow-toggle"] input[type="checkbox"]');
+          const freshGlowColorPicker = this.overlay?.querySelector('[data-role="text-input-glow-color"]');
+          const freshGlowIntensitySlider = this.overlay?.querySelector('[data-role="text-input-glow-intensity"]');
+          const freshGlowOpacitySlider = this.overlay?.querySelector('[data-role="text-input-glow-opacity"]');
+          const freshMaxWidthSlider = this.overlay?.querySelector('[data-role="text-input-max-width"]');
+          const freshBottomPositionSlider = this.overlay?.querySelector('[data-role="text-input-bottom-position"]');
+          
+          // Use current theme defaults from instance
+          const defaults = this.textInputDefaults;
+          
           const settings = {
-            borderRadius: parseInt(radiusSlider?.value || textInputDefaults.borderRadius),
-            showBorder: borderToggle?.checked || false,
-            backgroundColor: bgColorPicker?.value || textInputDefaults.backgroundColor,
-            textColor: textColorPicker?.value || textInputDefaults.textColor,
-            borderColor: borderColorPicker?.value || textInputDefaults.borderColor,
-            borderWidth: parseFloat(borderWidthSlider?.value || textInputDefaults.borderWidth),
-            borderOpacity: parseFloat(borderOpacitySlider?.value || textInputDefaults.borderOpacity),
-            showGlow: glowToggle?.checked || false,
-            glowColor: glowColorPicker?.value || textInputDefaults.glowColor,
-            glowIntensity: parseInt(glowIntensitySlider?.value || textInputDefaults.glowIntensity),
-            glowOpacity: parseFloat(glowOpacitySlider?.value || textInputDefaults.glowOpacity),
-            maxWidth: parseInt(maxWidthSlider?.value || textInputDefaults.maxWidth),
-            bottomPosition: parseInt(bottomPositionSlider?.value || textInputDefaults.bottomPosition)
+            borderRadius: freshRadiusSlider?.value !== undefined ? parseInt(freshRadiusSlider.value) : defaults.borderRadius,
+            showBorder: freshBorderToggle?.checked !== undefined ? freshBorderToggle.checked : false,
+            backgroundColor: freshBgColorPicker?.value || defaults.backgroundColor,
+            textColor: freshTextColorPicker?.value || defaults.textColor,
+            borderColor: freshBorderColorPicker?.value || defaults.borderColor,
+            borderWidth: freshBorderWidthSlider?.value !== undefined ? parseFloat(freshBorderWidthSlider.value) : defaults.borderWidth,
+            borderOpacity: freshBorderOpacitySlider?.value !== undefined ? parseFloat(freshBorderOpacitySlider.value) : defaults.borderOpacity,
+            showGlow: freshGlowToggle?.checked !== undefined ? freshGlowToggle.checked : false,
+            glowColor: freshGlowColorPicker?.value || defaults.glowColor,
+            glowIntensity: freshGlowIntensitySlider?.value !== undefined ? parseInt(freshGlowIntensitySlider.value) : defaults.glowIntensity,
+            glowOpacity: freshGlowOpacitySlider?.value !== undefined ? parseFloat(freshGlowOpacitySlider.value) : defaults.glowOpacity,
+            maxWidth: freshMaxWidthSlider?.value !== undefined ? parseInt(freshMaxWidthSlider.value) : defaults.maxWidth,
+            bottomPosition: freshBottomPositionSlider?.value !== undefined ? parseInt(freshBottomPositionSlider.value) : defaults.bottomPosition
           };
 
-          // Get fresh elementSettings to avoid conflicts
           const { elementSettings: freshSettings = {} } = await chrome.storage.sync.get('elementSettings');
           if (!freshSettings.textInputByTheme) {
             freshSettings.textInputByTheme = {};
           }
           
-          // Save for current theme
-          freshSettings.textInputByTheme[currentThemeId] = settings;
-          
+          // Use current theme ID from instance instead of closure
+          freshSettings.textInputByTheme[this.currentThemeId] = settings;
           await chrome.storage.sync.set({ elementSettings: freshSettings });
-
-          // Send message to content script to update text input styling
-          chrome.tabs.query({ url: '*://aistudio.google.com/*' }, (tabs) => {
-            tabs.forEach(tab => {
-              chrome.tabs.sendMessage(tab.id, { 
-                type: 'UPDATE_TEXT_INPUT_STYLING', 
-                settings: settings,
-                themeId: currentThemeId
-              }).catch(() => {});
-            });
-          });
         } catch (error) {
           console.error('Failed to save text input settings:', error);
         }
       }, 150);
     };
+
+    // Setup event listeners only once
+    if (!this.elementsTabInitialized) {
+      // Dropdown toggle
+      const textInputHeader = this.overlay.querySelector('[data-role="text-input-header"]');
+      const textInputSection = this.overlay.querySelector('.text-input-section');
+      const chevron = textInputHeader?.querySelector('.setting-chevron');
+      
+      if (textInputHeader && textInputSection && chevron) {
+        textInputHeader.addEventListener('click', () => {
+          const isHidden = textInputSection.style.display === 'none';
+          textInputSection.style.display = isHidden ? 'flex' : 'none';
+          chevron.classList.toggle('expanded', isHidden);
+        });
+      }
+
+      // Advanced dropdown toggle
+      const advancedHeader = this.overlay.querySelector('[data-role="advanced-header"]');
+      const advancedContent = this.overlay.querySelector('[data-role="advanced-content"]');
+      const advancedChevron = advancedHeader?.querySelector('.advanced-chevron');
+      
+      if (advancedHeader && advancedContent && advancedChevron) {
+        advancedChevron.classList.add('expanded');
+        advancedHeader.addEventListener('click', () => {
+          const isHidden = advancedContent.style.display === 'none';
+          advancedContent.style.display = isHidden ? 'block' : 'none';
+          advancedChevron.classList.toggle('expanded', isHidden);
+        });
+      }
 
     // Border Radius slider
     if (radiusSlider && radiusValue) {
@@ -1367,7 +1465,8 @@ export class SettingsModal {
         radiusValue.textContent = `${value}px`;
         updateSliderProgress(radiusSlider, value);
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1378,7 +1477,8 @@ export class SettingsModal {
           borderSliders.style.display = borderToggle.checked ? 'block' : 'none';
         }
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1389,7 +1489,8 @@ export class SettingsModal {
         borderWidthValue.textContent = `${value}px`;
         updateSliderProgress(borderWidthSlider, value);
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1400,7 +1501,8 @@ export class SettingsModal {
         borderOpacityValue.textContent = `${Math.round(value * 100)}%`;
         updateSliderProgress(borderOpacitySlider, value);
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1410,7 +1512,8 @@ export class SettingsModal {
         const value = e.target.value.toUpperCase();
         bgColorHex.value = value;
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
 
       bgColorHex.addEventListener('change', (e) => {
@@ -1422,7 +1525,8 @@ export class SettingsModal {
           bgColorPicker.value = value;
           bgColorHex.value = value;
           updatePreview();
-          saveTextInputSettings();
+          this.applyTextInputImmediately();
+          this.saveTextInputSettings();
         }
       });
     }
@@ -1433,7 +1537,8 @@ export class SettingsModal {
         const value = e.target.value.toUpperCase();
         textColorHex.value = value;
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
 
       textColorHex.addEventListener('change', (e) => {
@@ -1445,7 +1550,8 @@ export class SettingsModal {
           textColorPicker.value = value;
           textColorHex.value = value;
           updatePreview();
-          saveTextInputSettings();
+          this.applyTextInputImmediately();
+          this.saveTextInputSettings();
         }
       });
     }
@@ -1459,7 +1565,8 @@ export class SettingsModal {
       
       borderColorPicker.addEventListener('input', (e) => {
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1470,7 +1577,8 @@ export class SettingsModal {
           glowSliders.style.display = glowToggle.checked ? 'block' : 'none';
         }
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1481,7 +1589,8 @@ export class SettingsModal {
         glowIntensityValue.textContent = `${value}px`;
         updateSliderProgress(glowIntensitySlider, value);
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1492,7 +1601,8 @@ export class SettingsModal {
         glowOpacityValue.textContent = `${Math.round(value * 100)}%`;
         updateSliderProgress(glowOpacitySlider, value);
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1505,7 +1615,8 @@ export class SettingsModal {
       
       glowColorPicker.addEventListener('input', (e) => {
         updatePreview();
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1515,7 +1626,8 @@ export class SettingsModal {
         const value = parseInt(e.target.value);
         maxWidthValue.textContent = `${value}px`;
         updateSliderProgress(maxWidthSlider, value);
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
@@ -1525,13 +1637,26 @@ export class SettingsModal {
         const value = parseInt(e.target.value);
         bottomPositionValue.textContent = `${value}px`;
         updateSliderProgress(bottomPositionSlider, value);
-        saveTextInputSettings();
+        this.applyTextInputImmediately();
+        this.saveTextInputSettings();
       });
     }
 
-    // Reset button - clears per-theme customization
+    }
+    
+    // Reset button - OUTSIDE initialization block to always use current theme defaults and apply function
     if (resetBtn) {
-      resetBtn.addEventListener('click', async () => {
+      // Remove old listener if exists
+      const oldListener = resetBtn._resetListener;
+      if (oldListener) {
+        resetBtn.removeEventListener('click', oldListener);
+      }
+      
+      // Create new listener
+      const newListener = async () => {
+        // Get current theme defaults
+        const defaults = this.textInputDefaults;
+        
         // Delete the per-theme settings to revert to theme defaults
         const { elementSettings: freshSettings = {} } = await chrome.storage.sync.get('elementSettings');
         if (freshSettings.textInputByTheme && freshSettings.textInputByTheme[currentThemeId]) {
@@ -1541,95 +1666,290 @@ export class SettingsModal {
         
         // Update UI to theme defaults
         if (radiusSlider && radiusValue) {
-          radiusSlider.value = textInputDefaults.borderRadius;
-          radiusValue.textContent = `${textInputDefaults.borderRadius}px`;
-          updateSliderProgress(radiusSlider, textInputDefaults.borderRadius);
+          radiusSlider.value = defaults.borderRadius;
+          radiusValue.textContent = `${defaults.borderRadius}px`;
+          updateSliderProgress(radiusSlider, defaults.borderRadius);
         }
         if (borderToggle) {
-          borderToggle.checked = textInputDefaults.showBorder || false;
+          borderToggle.checked = defaults.showBorder || false;
           if (borderSliders) {
-            borderSliders.style.display = textInputDefaults.showBorder ? 'block' : 'none';
+            borderSliders.style.display = defaults.showBorder ? 'block' : 'none';
           }
         }
         if (borderWidthSlider && borderWidthValue) {
-          borderWidthSlider.value = textInputDefaults.borderWidth;
-          borderWidthValue.textContent = `${textInputDefaults.borderWidth}px`;
-          updateSliderProgress(borderWidthSlider, textInputDefaults.borderWidth);
+          borderWidthSlider.value = defaults.borderWidth;
+          borderWidthValue.textContent = `${defaults.borderWidth}px`;
+          updateSliderProgress(borderWidthSlider, defaults.borderWidth);
         }
         if (borderOpacitySlider && borderOpacityValue) {
-          borderOpacitySlider.value = textInputDefaults.borderOpacity;
-          borderOpacityValue.textContent = `${Math.round(textInputDefaults.borderOpacity * 100)}%`;
-          updateSliderProgress(borderOpacitySlider, textInputDefaults.borderOpacity);
+          borderOpacitySlider.value = defaults.borderOpacity;
+          borderOpacityValue.textContent = `${Math.round(defaults.borderOpacity * 100)}%`;
+          updateSliderProgress(borderOpacitySlider, defaults.borderOpacity);
         }
         if (bgColorPicker && bgColorHex) {
-          bgColorPicker.value = textInputDefaults.backgroundColor;
-          bgColorHex.value = textInputDefaults.backgroundColor.toUpperCase();
+          bgColorPicker.value = defaults.backgroundColor;
+          bgColorHex.value = defaults.backgroundColor.toUpperCase();
         }
         if (textColorPicker && textColorHex) {
-          textColorPicker.value = textInputDefaults.textColor;
-          textColorHex.value = textInputDefaults.textColor.toUpperCase();
+          textColorPicker.value = defaults.textColor;
+          textColorHex.value = defaults.textColor.toUpperCase();
         }
         if (borderColorPicker) {
-          borderColorPicker.value = textInputDefaults.borderColor;
+          borderColorPicker.value = defaults.borderColor;
         }
         if (glowToggle) {
-          glowToggle.checked = textInputDefaults.showGlow || false;
+          glowToggle.checked = defaults.showGlow || false;
           if (glowSliders) {
-            glowSliders.style.display = textInputDefaults.showGlow ? 'block' : 'none';
+            glowSliders.style.display = defaults.showGlow ? 'block' : 'none';
           }
         }
         if (glowIntensitySlider && glowIntensityValue) {
-          glowIntensitySlider.value = textInputDefaults.glowIntensity;
-          glowIntensityValue.textContent = `${textInputDefaults.glowIntensity}px`;
-          updateSliderProgress(glowIntensitySlider, textInputDefaults.glowIntensity);
+          glowIntensitySlider.value = defaults.glowIntensity;
+          glowIntensityValue.textContent = `${defaults.glowIntensity}px`;
+          updateSliderProgress(glowIntensitySlider, defaults.glowIntensity);
         }
         if (glowOpacitySlider && glowOpacityValue) {
-          glowOpacitySlider.value = textInputDefaults.glowOpacity;
-          glowOpacityValue.textContent = `${Math.round(textInputDefaults.glowOpacity * 100)}%`;
-          updateSliderProgress(glowOpacitySlider, textInputDefaults.glowOpacity);
+          glowOpacitySlider.value = defaults.glowOpacity;
+          glowOpacityValue.textContent = `${Math.round(defaults.glowOpacity * 100)}%`;
+          updateSliderProgress(glowOpacitySlider, defaults.glowOpacity);
         }
         if (glowColorPicker) {
-          glowColorPicker.value = textInputDefaults.glowColor;
+          glowColorPicker.value = defaults.glowColor;
         }
         if (maxWidthSlider && maxWidthValue) {
-          maxWidthSlider.value = textInputDefaults.maxWidth;
-          maxWidthValue.textContent = `${textInputDefaults.maxWidth}px`;
-          updateSliderProgress(maxWidthSlider, textInputDefaults.maxWidth);
+          maxWidthSlider.value = defaults.maxWidth;
+          maxWidthValue.textContent = `${defaults.maxWidth}px`;
+          updateSliderProgress(maxWidthSlider, defaults.maxWidth);
         }
         if (bottomPositionSlider && bottomPositionValue) {
-          bottomPositionSlider.value = textInputDefaults.bottomPosition;
-          bottomPositionValue.textContent = `${textInputDefaults.bottomPosition}px`;
-          updateSliderProgress(bottomPositionSlider, textInputDefaults.bottomPosition);
+          bottomPositionSlider.value = defaults.bottomPosition;
+          bottomPositionValue.textContent = `${defaults.bottomPosition}px`;
+          updateSliderProgress(bottomPositionSlider, defaults.bottomPosition);
         }
         updatePreview();
         
-        // Send message to content script to use theme defaults
-        chrome.tabs.query({ url: '*://aistudio.google.com/*' }, (tabs) => {
-          tabs.forEach(tab => {
-            chrome.tabs.sendMessage(tab.id, { 
-              type: 'UPDATE_TEXT_INPUT_STYLING', 
-              settings: textInputDefaults,
-              themeId: currentThemeId
-            }).catch(() => {});
-          });
-        });
+        // INSTANT apply to website using current apply function
+        if (this.applyTextInputImmediately) {
+          this.applyTextInputImmediately();
+        }
         
         this.showNotification('Reset to theme defaults', 'success');
-      });
+      };
+      
+      // Store listener reference and attach
+      resetBtn._resetListener = newListener;
+      resetBtn.addEventListener('click', newListener);
     }
 
     // Initial preview update
     updatePreview();
 
-    // Store refresh function for theme change handling
-    this.refreshTextInputControls = () => {
-      // Re-initialize with new theme
-      this.initElementsTab();
-    };
+    // Mark elements tab as initialized
+    this.elementsTabInitialized = true;
   }
 
-  async initOptimizationTab() {
-    // No optimization settings currently
+
+
+  async initForFunTab() {
+    console.log('[BAS] initForFunTab called');
+    if (!this.overlay) {
+      console.error('[BAS] Overlay not found');
+      return;
+    }
+
+    const imagePreview = this.overlay.querySelector('#content-blocked-image-preview');
+    const imageInput = this.overlay.querySelector('#content-blocked-image-input');
+    const dropzone = this.overlay.querySelector('#content-blocked-image-dropzone');
+    const imageUrlInput = this.overlay.querySelector('#content-blocked-image-url');
+    const dropzoneOverlay = dropzone?.querySelector('.dropzone-overlay');
+    const removeBtn = this.overlay.querySelector('#remove-content-blocked-image');
+    const featureToggle = this.overlay.querySelector('#content-blocked-feature-toggle');
+
+    console.log('[BAS] Elements found:', {
+      imagePreview: !!imagePreview,
+      imageInput: !!imageInput,
+      dropzone: !!dropzone,
+      imageUrlInput: !!imageUrlInput,
+      dropzoneOverlay: !!dropzoneOverlay,
+      removeBtn: !!removeBtn,
+      featureToggle: !!featureToggle
+    });
+
+    if (!imagePreview || !imageInput || !dropzone || !imageUrlInput || !dropzoneOverlay || !removeBtn || !featureToggle) {
+      console.error('[BAS] For Fun tab elements not found');
+      return;
+    }
+
+    console.log('[BAS] All elements found, initializing...');
+
+    const saveImage = (url) => {
+      console.log('[BAS] Saving image:', url);
+      const saveCallback = () => {
+        console.log('[BAS] Image saved, notifying content script');
+        // Notify content script to update blocked content images
+        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+          if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: 'CONTENT_BLOCKED_IMAGE_CHANGED',
+              imageUrl: url
+            });
+          }
+        });
+      };
+
+      if (url.startsWith('data:')) {
+        chrome.storage.local.set({ contentBlockedImageUrl: url }, saveCallback);
+      } else {
+        // Clear local storage and save to sync
+        chrome.storage.local.remove('contentBlockedImageUrl', () => {
+          chrome.storage.sync.set({ contentBlockedImageUrl: url }, saveCallback);
+        });
+      }
+    };
+
+    const displayImage = (url) => {
+      imagePreview.style.backgroundImage = `url(${url})`;
+      imageUrlInput.value = url;
+      if (url) {
+        imagePreview.style.opacity = '1';
+        dropzoneOverlay.style.opacity = '0';
+        removeBtn.style.display = 'flex';
+      } else {
+        imagePreview.style.opacity = '0';
+        dropzoneOverlay.style.opacity = '1';
+        removeBtn.style.display = 'none';
+      }
+    };
+
+    Promise.all([
+      new Promise(resolve => chrome.storage.sync.get(['contentBlockedImageUrl', 'contentBlockedFeatureEnabled'], resolve)),
+      new Promise(resolve => chrome.storage.local.get(['contentBlockedImageUrl'], resolve))
+    ]).then(([syncData, localData]) => {
+      const url = localData.contentBlockedImageUrl || syncData.contentBlockedImageUrl || 'https://media1.tenor.com/m/h75s9-F1i0MAAAAC/james-doakes.gif';
+      displayImage(url);
+      featureToggle.checked = syncData.contentBlockedFeatureEnabled !== false;
+      
+      // Set initial state of image setting container
+      const imageSettingContainer = this.overlay.querySelector('.image-setting-container');
+      if (imageSettingContainer) {
+        if (featureToggle.checked) {
+          imageSettingContainer.style.opacity = '1';
+          imageSettingContainer.style.pointerEvents = 'auto';
+        } else {
+          imageSettingContainer.style.opacity = '0.5';
+          imageSettingContainer.style.pointerEvents = 'none';
+        }
+      }
+    });
+
+    featureToggle.addEventListener('change', () => {
+      console.log('[BAS] Feature toggle changed:', featureToggle.checked);
+      
+      // Grey out the image setting container when disabled
+      const imageSettingContainer = this.overlay.querySelector('.image-setting-container');
+      if (imageSettingContainer) {
+        if (featureToggle.checked) {
+          imageSettingContainer.style.opacity = '1';
+          imageSettingContainer.style.pointerEvents = 'auto';
+        } else {
+          imageSettingContainer.style.opacity = '0.5';
+          imageSettingContainer.style.pointerEvents = 'none';
+        }
+      }
+      
+      chrome.storage.sync.set({ contentBlockedFeatureEnabled: featureToggle.checked }, () => {
+        console.log('[BAS] Feature toggle saved:', featureToggle.checked);
+        // Notify content script to update blocked content
+        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+          if (tabs[0]) {
+            console.log('[BAS] Sending message to content script');
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: 'CONTENT_BLOCKED_FEATURE_CHANGED',
+              enabled: featureToggle.checked
+            });
+          }
+        });
+      });
+    });
+
+    dropzone.addEventListener('click', (e) => {
+      if (e.target !== removeBtn && !removeBtn.contains(e.target)) {
+        imageInput.click();
+      }
+    });
+
+    dropzone.addEventListener('mouseenter', () => {
+      if (imagePreview.style.opacity === '1') {
+        dropzoneOverlay.style.opacity = '1';
+      }
+    });
+
+    dropzone.addEventListener('mouseleave', () => {
+      if (imagePreview.style.opacity === '1') {
+        dropzoneOverlay.style.opacity = '0';
+      }
+    });
+
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('[BAS] Remove button clicked');
+      const defaultUrl = 'https://media1.tenor.com/m/h75s9-F1i0MAAAAC/james-doakes.gif';
+      
+      // Enable the feature when resetting to default
+      featureToggle.checked = true;
+      chrome.storage.sync.set({ contentBlockedFeatureEnabled: true });
+      
+      displayImage(defaultUrl);
+      saveImage(defaultUrl);
+      console.log('[BAS] Default image set:', defaultUrl);
+    });
+
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const url = event.target.result;
+          displayImage(url);
+          saveImage(url);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    imageUrlInput.addEventListener('change', () => {
+      const url = imageUrlInput.value;
+      displayImage(url);
+      saveImage(url);
+    });
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = 'var(--bas-primary, #4A9FF5)';
+    });
+
+    dropzone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = '';
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = '';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const url = event.target.result;
+          displayImage(url);
+          saveImage(url);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
   }
 
   async initGeneralTab() {
