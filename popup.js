@@ -15,7 +15,7 @@ const setHeaderMetadata = async () => {
   if (themeButton) {
     themeButton.setAttribute(
       "aria-label",
-      `${manifestMeta.name} theme settings`,
+      `${manifestMeta.name} settings`,
     );
   }
 

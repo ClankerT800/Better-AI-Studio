@@ -1,4 +1,13 @@
-﻿(() => {     if (window.geminiWorkerRunning) return;
+﻿(async () => {
+    if (window.geminiWorkerRunning) return;
+
+    // Check if extension is disabled
+    const { extensionDisabled = false } = await chrome.storage.sync.get('extensionDisabled');
+    if (extensionDisabled) {
+        console.log('Better AI Studio: Extension is disabled');
+        return;
+    }
+
     window.geminiWorkerRunning = true;
 
     const SELECTORS = {
@@ -14,7 +23,7 @@
         prompt: 'textarea[aria-label*="Type something"]',
         panel: '.ms-sliding-right-panel-dialog',
         chat: '.chat-view-container',
-        turn: 'ms-turn',
+        turn: '.chat-turn-container',
         modalDialog: 'mat-mdc-dialog-container',
         modalRow: 'ms-model-carousel-row',
         modalContentBtn: 'ms-model-carousel-row .content-button',
@@ -49,7 +58,10 @@
             preset: null,
             accountNameInFlight: false,
             userClickingAccount: false,
-            accountNameFetched: false
+            accountNameFetched: false,
+            elementSettings: {
+                historyAnimation: true
+            }
         };
     }
 
@@ -66,7 +78,7 @@
   <path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z" fill="currentColor"></path>
 </svg>`,
         stop: `<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor">
-  <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Z" fill="currentColor"></path>
+  <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z" fill="currentColor"></path>
 </svg>`
     };
 
@@ -102,7 +114,7 @@
   box-shadow: 0 6px 18px rgba(17, 17, 17, 0.25) !important;
 }
 .bas-run-button:active:not(:disabled) {
-  background: var(--bas-primary-active, #0f47a1) !important;
+  background: var(--bas-primary) !important;
   transform: translateY(1px);
 }
 .bas-run-button:disabled {
@@ -112,8 +124,7 @@
   box-shadow: none !important;
 }
 .bas-run-button--active {
-  background: var(--bas-primary-active, #0f47a1) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bas-primary) 40%, transparent) !important;
+  background: var(--bas-primary) !important;
 }
 .bas-run-button:focus-visible {
   outline: 2px solid var(--bas-primary, #1a73e8);
@@ -296,15 +307,9 @@
 
     const setRunButtonActiveState = (button, isActive) => {
         if (isActive) {
-            button.style.setProperty('background-color', 'var(--bas-primary-active, #0f47a1)', 'important');
-            button.style.setProperty(
-                'box-shadow',
-                '0 0 0 3px color-mix(in srgb, var(--bas-primary) 40%, transparent)',
-                'important'
-            );
+            button.style.setProperty('background-color', 'var(--bas-primary)', 'important');
         } else {
             button.style.setProperty('background-color', 'var(--bas-primary, #1a73e8)', 'important');
-            button.style.removeProperty('box-shadow');
         }
         scheduleRunButtonIconColorUpdate(button);
         button.classList.toggle('bas-run-button--active', isActive);
@@ -1620,6 +1625,37 @@
                 sections.push('.account-switcher-text { color: var(--bas-text) !important; font-weight: 500 !important; transition: none !important; animation: none !important; opacity: 1 !important; transform: none !important; pointer-events: auto !important; }');
             }
 
+            // Hide number input spin buttons globally
+            sections.push(`
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  margin: 0 !important;
+}
+input[type="number"] {
+  appearance: textfield !important;
+  -moz-appearance: textfield !important;
+}
+            `.trim());
+
+            // Override hardcoded icon gradients with theme colors
+            sections.push(`
+.app-card .icon-container .material-symbols-outlined {
+  background: var(--bas-primary) !important;
+  background-clip: text !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+            `.trim());
+
+            // Remove background from model icons
+            sections.push(`
+.model-icon {
+  background-color: transparent !important;
+}
+            `.trim());
+
             return sections.join('\n\n');
         }
     }
@@ -1659,6 +1695,273 @@
                 console.warn('Failed to replace Google logo:', error);
             }
         });
+    };
+
+    const replaceSparkleWithRestart = () => {
+        // Find all SVG elements that match the sparkle icon pattern
+        const svgs = document.querySelectorAll('svg[width="20"][height="20"]');
+        
+        svgs.forEach((svg) => {
+            // Skip if already replaced
+            if (svg.dataset.basRestartReplaced) return;
+            
+            // Check if this is the sparkle icon by looking for the characteristic paths
+            const path = svg.querySelector('path[d*="M10 17.5833"]');
+            if (!path) return;
+            
+            // Mark as replaced
+            svg.dataset.basRestartReplaced = '1';
+            svg.classList.add('bas-restart-icon');
+            
+            // Replace with restart icon using theme colors
+            svg.innerHTML = `
+                <path d="M16.25 10C16.25 13.4518 13.4518 16.25 10 16.25C6.54822 16.25 3.75 13.4518 3.75 10C3.75 6.54822 6.54822 3.75 10 3.75C11.9632 3.75 13.7036 4.66839 14.7943 6.09375M14.7943 6.09375V3.125M14.7943 6.09375H11.875" stroke="var(--bas-text)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            `;
+        });
+    };
+
+    const replaceAddCircleIcons = () => {
+        // Find all material-symbols-outlined spans with add_circle text
+        const addCircleSpans = document.querySelectorAll('.material-symbols-outlined');
+        
+        addCircleSpans.forEach((span) => {
+            // Skip if already replaced
+            if (span.dataset.basAddReplaced) return;
+            
+            // Check if this is the add_circle icon
+            if (span.textContent.trim() !== 'add_circle') return;
+            
+            // Mark as replaced
+            span.dataset.basAddReplaced = '1';
+            
+            // Create SVG element
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            svg.setAttribute('height', '24');
+            svg.setAttribute('viewBox', '0 96 960 960');
+            svg.setAttribute('width', '24');
+            svg.setAttribute('fill', 'currentColor');
+            svg.style.cssText = 'width: 24px; height: 24px; display: block;';
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M480 856q-17 0-28.5-11.5T440 816v-240H200q-17 0-28.5-11.5T160 536q0-17 11.5-28.5T200 496h240V256q0-17 11.5-28.5T480 216q17 0 28.5 11.5T520 256v240h240q17 0 28.5 11.5T800 536q0 17-11.5 28.5T760 576H520v240q0 17-11.5 28.5T480 856Z');
+            
+            svg.appendChild(path);
+            
+            // Replace the span with the SVG
+            span.parentNode.replaceChild(svg, span);
+        });
+    };
+
+    const replaceSparkWithExperiment = () => {
+        // Find all material-symbols-outlined spans with spark text
+        const sparkSpans = document.querySelectorAll('.material-symbols-outlined');
+        
+        sparkSpans.forEach((span) => {
+            // Skip if already replaced
+            if (span.dataset.basSparkReplaced) return;
+            
+            // Check if this is the spark icon
+            if (span.textContent.trim() !== 'spark') return;
+            
+            // Mark as replaced
+            span.dataset.basSparkReplaced = '1';
+            
+            // Create SVG element
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            svg.setAttribute('height', '20');
+            svg.setAttribute('viewBox', '0 -960 960 960');
+            svg.setAttribute('width', '20');
+            svg.setAttribute('fill', 'currentColor');
+            svg.style.cssText = 'width: 20px; height: 20px; display: block; fill: var(--bas-primary, currentColor); margin-right: 4px;';
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M200-120q-51 0-72.5-45.5T138-250l222-270v-240h-40q-17 0-28.5-11.5T280-800q0-17 11.5-28.5T320-840h320q17 0 28.5 11.5T680-800q0 17-11.5 28.5T640-760h-40v240l222 270q32 39 10.5 84.5T760-120H200Zm80-120h400L544-400H416L280-240Zm-80 40h560L520-492v-268h-80v268L200-200Zm280-280Z');
+            
+            svg.appendChild(path);
+            
+            // Replace the span with the SVG
+            span.parentNode.replaceChild(svg, span);
+        });
+    };
+
+    const observeSparkleIcons = () => {
+        // Replace existing icons immediately
+        replaceSparkleWithRestart();
+
+        // Set up observer for new icons
+        const iconObserver = new MutationObserver(() => {
+            replaceSparkleWithRestart();
+        });
+
+        iconObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        $.obs.add(iconObserver);
+    };
+
+    const observeAddCircleIcons = () => {
+        // Replace existing icons immediately
+        replaceAddCircleIcons();
+
+        // Set up observer for new icons
+        const iconObserver = new MutationObserver(() => {
+            replaceAddCircleIcons();
+        });
+
+        iconObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        $.obs.add(iconObserver);
+    };
+
+    const observeSparkIcons = () => {
+        // Replace existing icons immediately
+        replaceSparkWithExperiment();
+
+        // Set up observer for new icons
+        const iconObserver = new MutationObserver(() => {
+            replaceSparkWithExperiment();
+        });
+
+        iconObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        $.obs.add(iconObserver);
+    };
+
+    const setupRecentlyViewedDropdown = () => {
+        const processRecentlyViewed = () => {
+            const containers = document.querySelectorAll('.recently-viewed-applets-container');
+            
+            containers.forEach((container) => {
+                // Skip if already processed
+                if (container.dataset.basDropdownAdded) return;
+                container.dataset.basDropdownAdded = '1';
+                
+                const header = container.querySelector('.pinned-applets-header');
+                const list = container.querySelector('.applets-list');
+                
+                if (!header || !list) return;
+                
+                // Style the header to be clickable and flex
+                header.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    cursor: pointer;
+                    user-select: none;
+                    transition: opacity 0.2s ease;
+                    padding-right: 8px;
+                `;
+                
+                // Create chevron icon
+                const chevron = document.createElement('span');
+                chevron.className = 'bas-recently-viewed-chevron';
+                chevron.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                `;
+                chevron.style.cssText = `
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: var(--bas-text-secondary, rgba(255, 255, 255, 0.6));
+                    transition: transform 0.2s ease, color 0.2s ease;
+                    flex-shrink: 0;
+                    margin-left: 12px;
+                `;
+                
+                // Append chevron to header
+                header.appendChild(chevron);
+                
+                // Load saved state
+                const savedState = localStorage.getItem('bas-recently-viewed-collapsed');
+                const isCollapsed = savedState === 'true';
+                
+                if (isCollapsed) {
+                    list.style.display = 'none';
+                    chevron.style.transform = 'rotate(-90deg)';
+                }
+                
+                // Toggle functionality - entire header is clickable
+                header.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const isCurrentlyCollapsed = list.style.display === 'none';
+                    
+                    if (isCurrentlyCollapsed) {
+                        list.style.display = '';
+                        chevron.style.transform = 'rotate(0deg)';
+                        localStorage.setItem('bas-recently-viewed-collapsed', 'false');
+                    } else {
+                        list.style.display = 'none';
+                        chevron.style.transform = 'rotate(-90deg)';
+                        localStorage.setItem('bas-recently-viewed-collapsed', 'true');
+                    }
+                });
+                
+                // Hover effect on entire header
+                header.addEventListener('mouseenter', () => {
+                    header.style.opacity = '0.8';
+                    chevron.style.color = 'var(--bas-text, rgba(255, 255, 255, 1))';
+                });
+                header.addEventListener('mouseleave', () => {
+                    header.style.opacity = '1';
+                    chevron.style.color = 'var(--bas-text-secondary, rgba(255, 255, 255, 0.6))';
+                });
+            });
+        };
+        
+        // Process immediately
+        processRecentlyViewed();
+        
+        // Set up observer for dynamically added recently viewed sections
+        const observer = new MutationObserver(() => {
+            processRecentlyViewed();
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        $.obs.add(observer);
+    };
+
+    const setupHistoryButtonAnimation = () => {
+        const handleHistoryClick = (e) => {
+            // Check if animation is enabled
+            if (!$.elementSettings.historyAnimation) return;
+            
+            const button = e.target.closest('.history-button');
+            if (!button) return;
+            
+            const icon = button.querySelector('.material-symbols-outlined');
+            if (!icon) return;
+            
+            // Remove the animation class if it exists (to reset)
+            icon.classList.remove('bas-spin');
+            
+            // Force reflow to restart animation
+            void icon.offsetWidth;
+            
+            // Add the animation class
+            icon.classList.add('bas-spin');
+            
+            // Remove after animation completes (300ms)
+            setTimeout(() => {
+                icon.classList.remove('bas-spin');
+            }, 300);
+        };
+        
+        // Use event delegation for dynamically added buttons
+        document.body.addEventListener('click', handleHistoryClick, true);
     };
 
     const observeLogos = () => {
@@ -1714,7 +2017,157 @@
         $.obs.add(attributeObserver);
     };
 
-    const init = () => {
+    // Immediately restore any hidden messages from old virtualization
+    const restoreHiddenMessages = () => {
+        const hiddenMessages = document.querySelectorAll('.chat-turn-container[data-bas-hidden]');
+        if (hiddenMessages.length > 0) {
+            console.log('[BAS] Restoring', hiddenMessages.length, 'hidden messages');
+            hiddenMessages.forEach(msg => {
+                msg.style.removeProperty('display');
+                msg.removeAttribute('data-bas-hidden');
+            });
+        }
+    };
+
+    // Load element settings from storage - per theme
+    const loadElementSettings = async () => {
+        try {
+            const [elementData, settingsData] = await Promise.all([
+                chrome.storage.sync.get('elementSettings'),
+                chrome.storage.sync.get('settings')
+            ]);
+            
+            const elementSettings = elementData.elementSettings || {};
+            const settings = settingsData.settings || {};
+            
+            $.elementSettings.historyAnimation = elementSettings.historyAnimation !== false;
+            
+            // Get current theme
+            const currentThemeId = settings.currentTheme || 'monochrome';
+            
+            // Load theme config to get defaults
+            let themeDefaults = {
+                borderRadius: 30,
+                showBorder: false,
+                backgroundColor: '#18181B',
+                textColor: '#FAFAFA',
+                borderColor: '#A1A1AA',
+                borderWidth: 1,
+                borderOpacity: 1,
+                showGlow: false,
+                glowColor: '#4A9FF5',
+                glowIntensity: 20,
+                glowOpacity: 1,
+                maxWidth: 1000,
+                bottomPosition: 0
+            };
+            
+            try {
+                const response = await fetch(chrome.runtime.getURL('themes/theme-config.json'));
+                const themeConfig = await response.json();
+                const currentTheme = themeConfig?.themes?.[currentThemeId];
+                if (currentTheme?.base) {
+                    themeDefaults = {
+                        borderRadius: 30,
+                        showBorder: false,
+                        backgroundColor: currentTheme.base.background || '#18181B',
+                        textColor: currentTheme.base.text || '#FAFAFA',
+                        borderColor: currentTheme.base.primary || '#A1A1AA',
+                        borderWidth: 1,
+                        borderOpacity: 1,
+                        showGlow: false,
+                        glowColor: currentTheme.base.primary || '#4A9FF5',
+                        glowIntensity: 20,
+                        glowOpacity: 1,
+                        maxWidth: 1000,
+                        bottomPosition: 0
+                    };
+                }
+            } catch (e) {
+                // Use fallback defaults
+            }
+            
+            // Get per-theme settings or use theme defaults
+            $.elementSettings.textInput = 
+                elementSettings.textInputByTheme?.[currentThemeId] || themeDefaults;
+            $.elementSettings.currentThemeId = currentThemeId;
+        } catch (error) {
+            console.error('Failed to load element settings:', error);
+        }
+    };
+
+    // Apply text input styling
+    const applyTextInputStyling = (settings) => {
+        if (!settings) {
+            settings = $.elementSettings.textInput || {
+                borderRadius: 30,
+                showBorder: false,
+                backgroundColor: '#18181B',
+                textColor: '#FAFAFA',
+                borderColor: '#A1A1AA',
+                borderWidth: 1,
+                borderOpacity: 1,
+                showGlow: false,
+                glowColor: '#4A9FF5',
+                glowIntensity: 20,
+                glowOpacity: 1,
+                maxWidth: 1000,
+                bottomPosition: 0
+            };
+        }
+
+        // Remove existing style tag if present
+        const existingStyle = document.getElementById('bas-text-input-styles');
+        if (existingStyle) {
+            existingStyle.remove();
+        }
+
+        // Create new style tag with CSS rules
+        const styleTag = document.createElement('style');
+        styleTag.id = 'bas-text-input-styles';
+        
+        // Convert hex to rgba for border with opacity
+        const hexToRgba = (hex, opacity) => {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        };
+        
+        const borderRule = settings.showBorder 
+            ? `border: ${settings.borderWidth || 1}px solid ${hexToRgba(settings.borderColor, settings.borderOpacity || 1)} !important;` 
+            : `border: none !important;`;
+        
+        const glowRule = settings.showGlow
+            ? `box-shadow: 0 0 ${settings.glowIntensity || 20}px ${hexToRgba(settings.glowColor, settings.glowOpacity || 1)} !important;`
+            : `box-shadow: none !important;`;
+        
+        const maxWidth = settings.maxWidth || 1000;
+        const bottomPosition = settings.bottomPosition || 0;
+        
+        styleTag.textContent = `
+            .prompt-input-wrapper.row.v3,
+            .prompt-input-wrapper[msfiledragdrop] {
+                border-radius: 13px !important;
+                background: none !important;
+            }
+        `;
+
+        document.head.appendChild(styleTag);
+    };
+
+    // Apply text input styling (CSS rules apply to all elements automatically)
+    const observeTextInputWrappers = () => {
+        applyTextInputStyling($.elementSettings.textInput);
+    };
+
+    const init = async () => {
+        // Restore any hidden messages immediately
+        restoreHiddenMessages();
+        
+        // Also check again after a delay in case messages load later
+        setTimeout(restoreHiddenMessages, 1000);
+        setTimeout(restoreHiddenMessages, 2000);
         chrome.storage.local.get(['presets', 'activePresetIndex'], (r) => {
             const preset = r.presets?.[r.activePresetIndex] ?? null;
             $.preset = preset;
@@ -1747,6 +2200,11 @@
         observeUrl();
         observeRunButton();
         observeLogos();
+        observeSparkleIcons();
+        observeAddCircleIcons();
+        observeSparkIcons();
+        setupHistoryButtonAnimation();
+        setupRecentlyViewedDropdown();
         setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
 
         // INSTANT execution - start immediately with zero delays
@@ -1761,11 +2219,20 @@
         setTimeout(() => { if (!$.accountNameFetched) raf(() => autoFetchAccountName()); }, 600);
 
         const themeEngine = new SmartThemeEngine();
+        const initTheme = async () => {
+            await themeEngine.init();
+            // After theme is loaded, load element settings and apply text input styling
+            await loadElementSettings();
+            observeTextInputWrappers();
+        };
+        
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => themeEngine.init());
+            document.addEventListener('DOMContentLoaded', () => initTheme());
         } else {
-            themeEngine.init();
+            initTheme();
         }
+
+        // Virtualization removed - was not working correctly
 
         chrome.runtime.onMessage.addListener((message) => {
             if (message.type === 'THEME_CHANGED') {
@@ -1776,6 +2243,31 @@
                 setTimeout(refreshRunButtonContrast, 100);
                 // Re-run logo replacement to apply new theme colors
                 replaceGoogleLogos();
+                // Re-run sparkle icon replacement
+                replaceSparkleWithRestart();
+                // Re-run add_circle icon replacement
+                replaceAddCircleIcons();
+                // Re-run spark icon replacement
+                replaceSparkWithExperiment();
+                // Reload element settings for new theme
+                loadElementSettings().then(() => {
+                    applyTextInputStyling($.elementSettings.textInput);
+                });
+            } else if (message.type === 'UPDATE_HISTORY_ANIMATION') {
+                // Update history animation setting
+                $.elementSettings.historyAnimation = message.enabled;
+            } else if (message.type === 'UPDATE_TEXT_INPUT_STYLING') {
+                // Update text input styling setting for current theme
+                const themeId = message.themeId || $.elementSettings.currentThemeId;
+                
+                // Only apply if it's for the current theme
+                chrome.storage.sync.get('settings', (data) => {
+                    const currentTheme = data.settings?.currentTheme || 'monochrome';
+                    if (themeId === currentTheme) {
+                        $.elementSettings.textInput = message.settings;
+                        applyTextInputStyling(message.settings);
+                    }
+                });
             }
         });
     };
@@ -1789,4 +2281,4 @@
     }, { once: true, passive: true });
 
     init();
-})()
+})();

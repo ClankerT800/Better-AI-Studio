@@ -29,6 +29,13 @@ const requestPresetApply = async (
 
 const executeContentScript = async (tabId, reason = "navigation") => {
   try {
+    // Check if extension is disabled
+    const { extensionDisabled = false } = await chrome.storage.sync.get(['extensionDisabled']);
+    if (extensionDisabled) {
+      console.log('Extension functionality is disabled, skipping content script injection');
+      return;
+    }
+
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["content.js"],
