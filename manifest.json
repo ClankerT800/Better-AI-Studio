@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better AI Studio",
-  "version": "1.1.4,5",
+  "version": "1.1.5",
   "description": "Automatically apply your favorite AI studio settings, and avoid manual setup for each chat.",
   "permissions": ["storage", "scripting", "webNavigation", "tabs"],
   "host_permissions": ["https://aistudio.google.com/*"],
