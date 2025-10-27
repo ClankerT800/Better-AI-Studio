@@ -82,7 +82,6 @@
             userClickingAccount: false,
             accountNameFetched: false,
             elementSettings: {
-                historyAnimation: true
             }
         };
     }
@@ -1764,10 +1763,20 @@ input[type="number"] {
 }
             `.trim());
 
-            // Remove background from model icons
+            // Override svg-icon and model-icon styles with Angular-specific attributes
             sections.push(`
-.model-icon {
-  background-color: transparent !important;
+.svg-icon[_ngcontent-ng-c2105409530] {
+  width: 20px !important;
+  aspect-ratio: 1 / 1 !important;
+}
+.model-icon[_ngcontent-ng-c2105409530] {
+  color: initial !important;
+  background-color: initial !important;
+  border-radius: initial !important;
+  padding: initial !important;
+  font-size: initial !important;
+  border: none !important;
+  background: none !important;
 }
             `.trim());
 
@@ -1830,7 +1839,7 @@ input[type="number"] {
             
             // Replace with restart icon using theme colors
             svg.innerHTML = `
-                <path d="M16.25 10C16.25 13.4518 13.4518 16.25 10 16.25C6.54822 16.25 3.75 13.4518 3.75 10C3.75 6.54822 6.54822 3.75 10 3.75C11.9632 3.75 13.7036 4.66839 14.7943 6.09375M14.7943 6.09375V3.125M14.7943 6.09375H11.875" stroke="var(--bas-text)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M16.25 10C16.25 13.4518 13.4518 16.25 10 16.25C6.54822 16.25 3.75 13.4518 3.75 10C3.75 6.54822 6.54822 3.75 10 3.75C11.9632 3.75 13.7036 4.66839 14.7943 6.09375M14.7943 6.09375V3.125M14.7943 6.09375H11.875" stroke="color-mix(in srgb, var(--bas-text) 90%, transparent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
             `;
         });
     };
@@ -2016,7 +2025,7 @@ input[type="number"] {
                 const chevron = document.createElement('span');
                 chevron.className = 'bas-recently-viewed-chevron';
                 chevron.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="color-mix(in srgb, var(--bas-text-secondary, rgba(255, 255, 255, 0.6)) 90%, transparent)" stroke-width="2">
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
                 `;
@@ -2063,11 +2072,11 @@ input[type="number"] {
                 // Hover effect on entire header
                 header.addEventListener('mouseenter', () => {
                     header.style.opacity = '0.8';
-                    chevron.style.color = 'var(--bas-text, rgba(255, 255, 255, 1))';
+                    chevron.style.color = 'color-mix(in srgb, var(--bas-text, rgba(255, 255, 255, 1)) 90%, transparent)';
                 });
                 header.addEventListener('mouseleave', () => {
                     header.style.opacity = '1';
-                    chevron.style.color = 'var(--bas-text-secondary, rgba(255, 255, 255, 0.6))';
+                    chevron.style.color = 'color-mix(in srgb, var(--bas-text-secondary, rgba(255, 255, 255, 0.6)) 90%, transparent)';
                 });
             });
         };
@@ -2085,36 +2094,6 @@ input[type="number"] {
             subtree: true
         });
         $.obs.add(observer);
-    };
-
-    const setupHistoryButtonAnimation = () => {
-        const handleHistoryClick = (e) => {
-            // Check if animation is enabled
-            if (!$.elementSettings.historyAnimation) return;
-            
-            const button = e.target.closest('.history-button');
-            if (!button) return;
-            
-            const icon = button.querySelector('.material-symbols-outlined');
-            if (!icon) return;
-            
-            // Remove the animation class if it exists (to reset)
-            icon.classList.remove('bas-spin');
-            
-            // Force reflow to restart animation
-            void icon.offsetWidth;
-            
-            // Add the animation class
-            icon.classList.add('bas-spin');
-            
-            // Remove after animation completes (300ms)
-            setTimeout(() => {
-                icon.classList.remove('bas-spin');
-            }, 300);
-        };
-        
-        // Use event delegation for dynamically added buttons
-        document.body.addEventListener('click', handleHistoryClick, true);
     };
 
     const observeLogos = () => {
@@ -2192,8 +2171,6 @@ input[type="number"] {
             
             const elementSettings = elementData.elementSettings || {};
             const settings = settingsData.settings || {};
-            
-            $.elementSettings.historyAnimation = elementSettings.historyAnimation !== false;
             
             // Get current theme
             const currentThemeId = settings.currentTheme || 'monochrome';
@@ -2565,7 +2542,6 @@ input[type="number"] {
         observeSparkleIcons();
         observeAddCircleIcons();
         observeSparkIcons();
-        setupHistoryButtonAnimation();
         setupRecentlyViewedDropdown();
         observeContentBlockedMessages();
         setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
@@ -2622,9 +2598,6 @@ input[type="number"] {
                 loadElementSettings().then(() => {
                     applyTextInputStyling($.elementSettings.textInput);
                 });
-            } else if (message.type === 'UPDATE_HISTORY_ANIMATION') {
-                // Update history animation setting
-                $.elementSettings.historyAnimation = message.enabled;
             } else if (message.type === 'UPDATE_TEXT_INPUT_STYLING') {
                 // INSTANT apply - but only if theme matches current page theme
                 chrome.storage.sync.get('settings', (data) => {

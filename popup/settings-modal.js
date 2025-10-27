@@ -146,18 +146,6 @@ const TEMPLATE = `
           <h3 class="section-title">Element Customization</h3>
           <div class="settings-group">
             <div class="setting-item">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">History Button Animation</label>
-                  <p class="setting-description">Enable or disable history button spin animations</p>
-                </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" data-role="history-animation-toggle" checked />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-            <div class="setting-item">
               <div class="setting-row" style="cursor: pointer;" data-role="text-input-header">
                 <div class="setting-info">
                   <label class="setting-label">Text Input Styling</label>
@@ -1123,33 +1111,6 @@ export class SettingsModal {
     const elementSettings = elementSettingsData.elementSettings || {};
     const themes = themeConfig.themes || {};
     const settings = settingsData.settings || {};
-
-    // History button animation toggle
-    const animationToggle = this.overlay.querySelector('[data-role="history-animation-toggle"]');
-    if (animationToggle) {
-      animationToggle.checked = elementSettings.historyAnimation !== false;
-      
-      animationToggle.addEventListener('change', async (e) => {
-        const enabled = e.target.checked;
-        const updatedSettings = { ...elementSettings, historyAnimation: enabled };
-        await chrome.storage.sync.set({ elementSettings: updatedSettings });
-        
-        // Send message to content script to update animation
-        chrome.tabs.query({ url: '*://aistudio.google.com/*' }, (tabs) => {
-          tabs.forEach(tab => {
-            chrome.tabs.sendMessage(tab.id, { 
-              type: 'UPDATE_HISTORY_ANIMATION', 
-              enabled: enabled 
-            }).catch(() => {});
-          });
-        });
-        
-        this.showNotification(
-          enabled ? 'History button animation enabled' : 'History button animation disabled', 
-          'success'
-        );
-      });
-    }
 
     // Text Input Customization - per theme
     const currentThemeId = settings?.currentTheme || 'monochrome';
