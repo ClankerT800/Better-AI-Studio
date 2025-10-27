@@ -1,4 +1,4 @@
-﻿(async () => {
+(async () => {
     if (window.geminiWorkerRunning) return;
 
     // Check if extension is disabled
@@ -30,10 +30,32 @@
         accountSwitcher: '.account-switcher-text',
         userName: '.name',
         accountDropdown: '[class*="account"], [class*="profile"], [class*="user"]',
-        dropdownTrigger: 'button[aria-expanded], [role="button"]:has(.account-switcher-text), button[class*="account"], button[aria-label*="Account"], button[aria-label*="Profile"]'
+        dropdownTrigger: 'button[aria-expanded], [role="button"]:has(.account-switcher-text), button[class*="account"], button[aria-label*="Account"], button[aria-label*="Profile"], .account-switcher-button'
     };
 
-    const ACCOUNT_NAME_SELECTOR = '#account-switcher .name, [id*="account-switcher"] .name, .account-switcher .name';
+    const forceReinitializeAccountSwitcher = () => {
+        // Clean up existing listeners
+        document.querySelectorAll('[data-basAccountListener]').forEach(trigger => {
+            if (trigger.basAccountClickHandler) {
+                trigger.removeEventListener('click', trigger.basAccountClickHandler);
+                delete trigger.basAccountClickHandler;
+            }
+            trigger.removeAttribute('data-basAccountListener');
+        });
+
+        // Reset state
+        $.accountNameInFlight = false;
+        $.accountNameFetched = false;
+
+        // Reinitialize
+        observeAccountSwitcher();
+        ensureAccountDisplayName();
+        setTimeout(() => {
+            if (!$.accountNameFetched) {
+                raf(() => autoFetchAccountName());
+            }
+        }, 100);
+    };
 
     const SLIDER_QUERIES = {
         temperature: [
@@ -110,7 +132,7 @@
   transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 .bas-run-button:hover:not(:disabled) {
-  background: var(--bas-primary-hover, #155ac9) !important;
+  background: color-mix(in srgb, var(--bas-primary) 25%, transparent) !important;
   box-shadow: 0 6px 18px rgba(17, 17, 17, 0.25) !important;
 }
 .bas-run-button:active:not(:disabled) {
@@ -1051,7 +1073,7 @@ ms-prompt-feedback img.loaded-image {
                 setTimeout(() => {
                     observeModel();
                     observeModal();
-                    observeAccountSwitcher();
+                    forceReinitializeAccountSwitcher();
                       queueApply();
                 }, 200);
             }
@@ -1075,7 +1097,7 @@ ms-prompt-feedback img.loaded-image {
                 setTimeout(() => {
                     observeModel();
                     observeModal();
-                    observeAccountSwitcher();
+                    forceReinitializeAccountSwitcher();
                     queueApply();
                 }, 200);
             };
@@ -1123,7 +1145,7 @@ ms-prompt-feedback img.loaded-image {
             setTimeout(() => {
                 observeModel();
                 observeModal();
-                observeAccountSwitcher();
+                forceReinitializeAccountSwitcher();
                queueApply();
             }, 200);
         };
@@ -1304,7 +1326,7 @@ ms-prompt-feedback img.loaded-image {
         if (!label) return;
 
         const labelText = label.textContent?.trim() ?? '';
-        
+
         // If it's already showing a name (not email), we're done
         if (!labelText.includes('@')) return;
 
@@ -1318,8 +1340,12 @@ ms-prompt-feedback img.loaded-image {
             if (nameEl && nameEl.textContent?.trim()) {
                 const name = nameEl.textContent.trim();
                 if (name) {
-                    label.textContent = name;
-                    $.accountNameFetched = true;
+                    // Find the current label (in case DOM changed)
+                    const currentLabel = document.querySelector(SELECTORS.accountSwitcher);
+                    if (currentLabel) {
+                        currentLabel.textContent = name;
+                        $.accountNameFetched = true;
+                    }
                 }
             }
         }
@@ -1334,9 +1360,14 @@ ms-prompt-feedback img.loaded-image {
             label.closest('[role="button"]') ||
             document.querySelector(SELECTORS.dropdownTrigger);
 
-        if (!trigger || trigger.dataset.basAccountListener) return;
-        
-        // Mark as having listener to avoid duplicates
+        if (!trigger) return;
+
+        // Remove existing listener if present to avoid duplicates
+        if (trigger.dataset.basAccountListener) {
+            trigger.removeEventListener('click', trigger.basAccountClickHandler);
+        }
+
+        // Mark as having listener
         trigger.dataset.basAccountListener = '1';
 
         // When user clicks, wait for overlay to open and capture the name
@@ -1359,6 +1390,9 @@ ms-prompt-feedback img.loaded-image {
             }, 300);
         };
 
+        // Store handler reference for cleanup
+        trigger.basAccountClickHandler = handleClick;
+
         // Listen for click to capture name when overlay opens
         trigger.addEventListener('click', handleClick);
     };
@@ -1378,7 +1412,7 @@ ms-prompt-feedback img.loaded-image {
         const accountObs = new MutationObserver(() => {
             // Always keep button listeners updated
             setupAccountButtonListeners();
-            
+
             // If overlay opens naturally (user clicked), try to grab the name
             raf(ensureAccountDisplayName);
         });
@@ -1392,7 +1426,56 @@ ms-prompt-feedback img.loaded-image {
         // Initial setup
         setupAccountButtonListeners();
         ensureAccountDisplayName();
-        
+
+        // Force re-setup on specific account switcher changes
+        const specificObserver = new MutationObserver((mutations) => {
+            let shouldReattach = false;
+            mutations.forEach((mutation) => {
+                // Check if account switcher elements were added, removed, or modified
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (node.matches && (node.matches(SELECTORS.accountSwitcher) ||
+                                node.querySelector && node.querySelector(SELECTORS.accountSwitcher))) {
+                                shouldReattach = true;
+                            }
+                        }
+                    });
+                    mutation.removedNodes.forEach((node) => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (node.matches && (node.matches(SELECTORS.accountSwitcher) ||
+                                node.querySelector && node.querySelector(SELECTORS.accountSwitcher))) {
+                                shouldReattach = true;
+                            }
+                        }
+                    });
+                }
+                // Check for attribute changes on account switcher elements
+                if (mutation.type === 'attributes' && mutation.target) {
+                    if (mutation.target.matches && (mutation.target.matches(SELECTORS.accountSwitcher) ||
+                        mutation.target.closest && mutation.target.closest(SELECTORS.dropdownTrigger))) {
+                        shouldReattach = true;
+                    }
+                }
+            });
+
+            if (shouldReattach) {
+                // Small delay to ensure DOM is stable
+                setTimeout(() => {
+                    setupAccountButtonListeners();
+                    ensureAccountDisplayName();
+                }, 50);
+            }
+        });
+
+        specificObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'id', 'role', 'aria-expanded', 'data-basAccountListener']
+        });
+        $.obs.add(specificObserver);
+
         // Automatically fetch name IMMEDIATELY - no delay
         raf(() => autoFetchAccountName());
     };
@@ -1439,12 +1522,16 @@ ms-prompt-feedback img.loaded-image {
             const nameEl = overlayRoot.querySelector('.name') ||
                            overlayRoot.querySelector('[class*="name"]') ||
                            document.querySelector(ACCOUNT_NAME_SELECTOR);
-            
+
             if (nameEl && nameEl.textContent?.trim()) {
                 const name = nameEl.textContent.trim();
                 if (name) {
-                    label.textContent = name;
-                    $.accountNameFetched = true;
+                    // Find the current label (in case DOM changed)
+                    const currentLabel = document.querySelector(SELECTORS.accountSwitcher);
+                    if (currentLabel) {
+                        currentLabel.textContent = name;
+                        $.accountNameFetched = true;
+                    }
                 }
             }
 
@@ -1452,18 +1539,18 @@ ms-prompt-feedback img.loaded-image {
             raf(() => {
                 // Method 1: Click trigger to toggle
                 trigger.click();
-                
+
                 // Method 2: Press Escape key
                 setTimeout(() => {
-                    document.dispatchEvent(new KeyboardEvent('keydown', { 
-                        key: 'Escape', 
+                    document.dispatchEvent(new KeyboardEvent('keydown', {
+                        key: 'Escape',
                         code: 'Escape',
                         keyCode: 27,
                         bubbles: true,
                         cancelable: true
                     }));
                 }, 50);
-                
+
                 // Method 3: Force remove if still present
                 setTimeout(() => {
                     const stillOpen = document.querySelector('#account-switcher');
@@ -1474,7 +1561,7 @@ ms-prompt-feedback img.loaded-image {
                         }
                     }
                 }, 150);
-                
+
                 // Restore container after all close attempts
                 setTimeout(() => {
                     if (container) {
@@ -1496,7 +1583,7 @@ ms-prompt-feedback img.loaded-image {
                     removeOverlayNodes(pane);
                 }
             }
-            
+
             if (container) {
                 if (originalStyle) {
                     container.setAttribute('style', originalStyle);
@@ -1750,32 +1837,46 @@ input[type="number"] {
 
     const replaceAddCircleIcons = () => {
         // Find all material-symbols-outlined spans with add_circle text
-        const addCircleSpans = document.querySelectorAll('.material-symbols-outlined');
-        
+        // Be more specific to avoid conflicts with other functions
+        const addCircleSpans = document.querySelectorAll('.material-symbols-outlined:not(.model-icon)');
+
+        console.log('[BAS] Looking for add_circle icons, found:', addCircleSpans.length);
+
         addCircleSpans.forEach((span) => {
             // Skip if already replaced
             if (span.dataset.basAddReplaced) return;
-            
+
             // Check if this is the add_circle icon
             if (span.textContent.trim() !== 'add_circle') return;
-            
+
+            console.log('[BAS] Replacing add_circle icon:', span);
+
             // Mark as replaced
             span.dataset.basAddReplaced = '1';
-            
-            // Create SVG element
+
+            // Create SVG element with proper classes
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
             svg.setAttribute('height', '24');
             svg.setAttribute('viewBox', '0 96 960 960');
             svg.setAttribute('width', '24');
+
+            // Copy classes from original span to maintain styling
+            svg.className = span.className + ' bas-svg-icon';
+
+            // Set SVG attributes to inherit color properly
             svg.setAttribute('fill', 'currentColor');
-            svg.style.cssText = 'width: 24px; height: 24px; display: block;';
-            
+
+            // Copy inline styles from original span
+            if (span.style.cssText) {
+                svg.style.cssText = span.style.cssText;
+            }
+
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', 'M480 856q-17 0-28.5-11.5T440 816v-240H200q-17 0-28.5-11.5T160 536q0-17 11.5-28.5T200 496h240V256q0-17 11.5-28.5T480 216q17 0 28.5 11.5T520 256v240h240q17 0 28.5 11.5T800 536q0 17-11.5 28.5T760 576H520v240q0 17-11.5 28.5T480 856Z');
-            
+
             svg.appendChild(path);
-            
+
             // Replace the span with the SVG
             span.parentNode.replaceChild(svg, span);
         });
@@ -1783,32 +1884,46 @@ input[type="number"] {
 
     const replaceSparkWithExperiment = () => {
         // Find all material-symbols-outlined spans with spark text
-        const sparkSpans = document.querySelectorAll('.material-symbols-outlined');
-        
+        // Target specifically model-icon spans for spark icons
+        const sparkSpans = document.querySelectorAll('.material-symbols-outlined.model-icon');
+
+        console.log('[BAS] Looking for spark icons, found:', sparkSpans.length);
+
         sparkSpans.forEach((span) => {
             // Skip if already replaced
             if (span.dataset.basSparkReplaced) return;
-            
+
             // Check if this is the spark icon
             if (span.textContent.trim() !== 'spark') return;
-            
+
+            console.log('[BAS] Replacing spark icon:', span);
+
             // Mark as replaced
             span.dataset.basSparkReplaced = '1';
-            
-            // Create SVG element
+
+            // Create SVG element with proper classes
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
             svg.setAttribute('height', '20');
             svg.setAttribute('viewBox', '0 -960 960 960');
             svg.setAttribute('width', '20');
+
+            // Copy classes from original span to maintain styling
+            svg.className = span.className + ' bas-svg-icon';
+
+            // Set SVG attributes to inherit color properly
             svg.setAttribute('fill', 'currentColor');
-            svg.style.cssText = 'width: 20px; height: 20px; display: block; fill: var(--bas-primary, currentColor); margin-right: 4px;';
-            
+
+            // Copy inline styles from original span
+            if (span.style.cssText) {
+                svg.style.cssText = span.style.cssText;
+            }
+
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', 'M200-120q-51 0-72.5-45.5T138-250l222-270v-240h-40q-17 0-28.5-11.5T280-800q0-17 11.5-28.5T320-840h320q17 0 28.5 11.5T680-800q0 17-11.5 28.5T640-760h-40v240l222 270q32 39 10.5 84.5T760-120H200Zm80-120h400L544-400H416L280-240Zm-80 40h560L520-492v-268h-80v268L200-200Zm280-280Z');
-            
+
             svg.appendChild(path);
-            
+
             // Replace the span with the SVG
             span.parentNode.replaceChild(svg, span);
         });
@@ -1816,11 +1931,11 @@ input[type="number"] {
 
     const observeSparkleIcons = () => {
         // Replace existing icons immediately
-        replaceSparkleWithRestart();
+        // Note: replaceSparkleWithRestart function doesn't exist, skipping
 
         // Set up observer for new icons
         const iconObserver = new MutationObserver(() => {
-            replaceSparkleWithRestart();
+            // Note: replaceSparkleWithRestart function doesn't exist, skipping
         });
 
         iconObserver.observe(document.body, {
@@ -1833,6 +1948,11 @@ input[type="number"] {
     const observeAddCircleIcons = () => {
         // Replace existing icons immediately
         replaceAddCircleIcons();
+
+        // Run multiple times to ensure all icons are replaced
+        setTimeout(replaceAddCircleIcons, 100);
+        setTimeout(replaceAddCircleIcons, 500);
+        setTimeout(replaceAddCircleIcons, 1000);
 
         // Set up observer for new icons
         const iconObserver = new MutationObserver(() => {
@@ -1849,6 +1969,11 @@ input[type="number"] {
     const observeSparkIcons = () => {
         // Replace existing icons immediately
         replaceSparkWithExperiment();
+
+        // Run multiple times to ensure all icons are replaced
+        setTimeout(replaceSparkWithExperiment, 100);
+        setTimeout(replaceSparkWithExperiment, 500);
+        setTimeout(replaceSparkWithExperiment, 1000);
 
         // Set up observer for new icons
         const iconObserver = new MutationObserver(() => {
@@ -2181,7 +2306,6 @@ input[type="number"] {
         styleTag.textContent = `
             .prompt-input-wrapper,
             .prompt-input-wrapper[class*="_ngcontent"],
-            .prompt-input-wrapper.row.v3,
             .prompt-input-wrapper[msfiledragdrop] {
                 background: ${settings.backgroundColor} !important;
                 color: ${settings.textColor} !important;
@@ -2192,6 +2316,23 @@ input[type="number"] {
                 ${glowRule}
                 max-width: ${maxWidth}px !important;
                 margin-bottom: ${bottomPosition}px !important;
+            }
+
+            /* Override for app generator - higher specificity */
+            .prompt-input-wrapper.row.column.v3,
+            .prompt-input-wrapper.row.column.v3[class*="_ngcontent"],
+            .prompt-input-wrapper.row.column.v3[msfiledragdrop] {
+                background: ${settings.backgroundColor} !important;
+                color: ${settings.textColor} !important;
+                border: ${borderWidth}px solid ${hexToRgba(settings.borderColor, borderOpacity)} !important;
+                border-radius: 12px !important;
+                padding: 16px !important;
+                box-shadow: 0 2px 8px ${hexToRgba(settings.glowColor, 0.08)} !important;
+                max-width: none !important;
+                margin-bottom: 0 !important;
+                margin-top: 0 !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
             }
             
             .prompt-input-wrapper textarea,
@@ -2430,15 +2571,23 @@ input[type="number"] {
         setTimeout(() => { if ($.preset) raf(() => apply($.preset)); }, 200);
 
         // INSTANT execution - start immediately with zero delays
-        observeAccountSwitcher();
-        ensureAccountDisplayName();
+        forceReinitializeAccountSwitcher();
         requestAnimationFrame(ensureAccountDisplayName);
         requestAnimationFrame(() => requestAnimationFrame(ensureAccountDisplayName));
-        
+
         // Run autoFetchAccountName multiple times to ensure it catches quickly
         setTimeout(() => { if (!$.accountNameFetched) raf(() => autoFetchAccountName()); }, 100);
         setTimeout(() => { if (!$.accountNameFetched) raf(() => autoFetchAccountName()); }, 300);
         setTimeout(() => { if (!$.accountNameFetched) raf(() => autoFetchAccountName()); }, 600);
+
+        // Periodic check to ensure account switcher is still working
+        setInterval(() => {
+            const label = document.querySelector(SELECTORS.accountSwitcher);
+            if (label && label.textContent?.trim().includes('@') && !$.accountNameInFlight) {
+                // Still showing email instead of name, try to refetch
+                raf(() => autoFetchAccountName());
+            }
+        }, 10000);
 
         const themeEngine = new SmartThemeEngine();
         const initTheme = async () => {
@@ -2458,13 +2607,13 @@ input[type="number"] {
             if (message.type === 'THEME_CHANGED') {
                 themeEngine.loadTheme();
                 // Re-run account switcher observer to apply new theme styles
-                observeAccountSwitcher();
+                forceReinitializeAccountSwitcher();
                 // Refresh run button contrast with new theme colors
                 setTimeout(refreshRunButtonContrast, 100);
                 // Re-run logo replacement to apply new theme colors
                 replaceGoogleLogos();
                 // Re-run sparkle icon replacement
-                replaceSparkleWithRestart();
+                // Note: replaceSparkleWithRestart function doesn't exist, skipping
                 // Re-run add_circle icon replacement
                 replaceAddCircleIcons();
                 // Re-run spark icon replacement
@@ -2503,6 +2652,15 @@ input[type="number"] {
         $.obs.forEach(o => o.disconnect());
         $.obs.clear();
         $.cache.clear();
+
+        // Clean up account switcher listeners
+        document.querySelectorAll('[data-basAccountListener]').forEach(trigger => {
+            if (trigger.basAccountClickHandler) {
+                trigger.removeEventListener('click', trigger.basAccountClickHandler);
+                delete trigger.basAccountClickHandler;
+            }
+            trigger.removeAttribute('data-basAccountListener');
+        });
     }, { once: true, passive: true });
 
     init();
